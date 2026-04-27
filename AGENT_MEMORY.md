@@ -60,3 +60,47 @@
 ### Open Questions (Deferred)
 - HMAC key rotation strategy → Phase 4
 - Multi-APK batch processing → Phase 5
+
+## Session 2: Apr 26-27, 2026 (Late Night Session)
+
+**Time:** 5:00 PM - 1:30 AM EEST  
+**Branch:** feature/pydantic-gates  
+**Agent:** Human-driven with AI assistance planning
+
+### Completed
+- ✅ CloudInstruction Pydantic schema (`daqiq/schemas/cloud_instruction.py`)
+- ✅ 6 comprehensive unit tests (`tests/unit/test_cloud_instruction.py`)
+- ✅ Security validators: AWS keys, JWT tokens, prompt injection
+- ✅ Type safety: Literal actions, confidence bounds
+- ✅ Hallucination prevention: ConfigDict(extra='forbid')
+- ✅ Professional git commit with detailed message
+- ✅ All quality gates passing (ruff, bandit, pytest)
+- ✅ 95.83% code coverage
+
+### Technical Decisions
+1. **JWT Regex Pattern:** Changed from `{10,}` to `+` for second segment to handle shorter payloads
+2. **Ruff Config:** Added S101 to ignore list (allow assert in tests)
+3. **Package Discovery:** Added `[tool.setuptools]` to exclude `output/` directory
+4. **Virtual Environment:** Using uv for faster package management
+
+### Challenges & Solutions
+- **Issue:** Roo Code connection failures
+  - **Solution:** Switched to manual implementation, plan to use Continue.dev
+- **Issue:** Ollama model naming confusion
+  - **Solution:** Downloading qwen3.5 (verified naming)
+- **Issue:** Virtual environment pip missing
+  - **Solution:** Used `uv pip` instead
+- **Issue:** Pre-commit hooks catching formatting
+  - **Solution:** Auto-fixed with ruff, updated ignore rules
+
+### Next Session Plan
+- Use Continue.dev with qwen3.5 for remaining components
+- Expected 10x speedup with AI assistance
+- Target: Complete Phase 0 by 12:00 PM (2.5 hours)
+
+### Metrics
+- **Session Duration:** ~8.5 hours (including troubleshooting)
+- **Productive Coding Time:** ~2 hours
+- **Code Written:** 109 lines (24 impl + 85 tests)
+- **Tests:** 6/6 passing
+- **Commits:** 2 (foundation + first component)

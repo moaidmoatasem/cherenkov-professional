@@ -38,3 +38,5 @@ output/
 logs/
 temp/
 .aider*
+.continue/
+.continue/
