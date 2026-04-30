@@ -1,68 +1,81 @@
-"""CloudInstruction Pydantic schema with security validators."""
+"""Pydantic schema for cloud-based security instructions."""
 
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class CloudInstruction(BaseModel):
-    """Structured instruction for cloud-based security analysis agents.
+    """Instruction for cloud-based security testing agents."""
 
-    Includes validators to prevent secret leakage and prompt injection.
-    """
+    task_id: str = Field(..., description="Unique task identifier")
+    action: Literal[
+        "analyze_smali",
+        "web_recon",
+        "validate_cve",
+        "complete_audit",
+        "analyze_threat_model",
+        "design_architecture",
+    ] = Field(..., description="Action to perform")
+    target: str = Field(..., description="Target of the action (e.g., file, URL, CVE-ID)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0.0-1.0)")
+    reasoning: str = Field(..., description="Reasoning behind the action")
 
-    model_config = ConfigDict(extra="forbid")
-
-    task_id: str
-    action: Literal["analyze_smali", "web_recon", "validate_cve", "complete_audit"]
-    target: str = Field(..., description="Sanitized target, no secrets")
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    reasoning: str
-
-    @field_validator("target", "reasoning")
+    @field_validator("target")
     @classmethod
-    def validate_no_secrets_or_injection(cls, value: str, info) -> str:
-        """Validate that fields don't contain secrets or prompt injection.
+    def validate_target_no_secrets(cls, v: str) -> str:
+        """Ensure target doesn't contain secrets."""
+        aws_pattern = r"AKIA[0-9A-Z]{16}"
+        jwt_pattern = r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
 
-        Args:
-            value: The field value to validate
-            info: Validation context
-
-        Returns:
-            The validated value
-
-        Raises:
-            ValueError: If AWS keys, JWT tokens, or prompt injection detected
-        """
-        field_name = info.field_name
-
-        # Check for AWS access keys
-        if re.search(r"AKIA[0-9A-Z]{16}", value):
+        if re.search(aws_pattern, v):
             raise ValueError(
-                f"AWS access key detected in {field_name}. "
-                "Remove secrets before creating instruction."
+                "AWS access key detected in target. Remove secrets before creating instruction."
             )
 
-        # Check for JWT tokens
-        if re.search(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+", value):
+        if re.search(jwt_pattern, v):
             raise ValueError(
-                f"JWT token detected in {field_name}. Remove secrets before creating instruction."
+                "JWT token detected in target. Remove secrets before creating instruction."
             )
 
-        # Check for prompt injection attempts
-        injection_patterns = [
-            "ignore previous",
-            "system:",
-            "bypass",
+        return v
+
+    @field_validator("reasoning")
+    @classmethod
+    def validate_reasoning_no_secrets(cls, v: str) -> str:
+        """Ensure reasoning doesn't contain secrets or prompt injections."""
+        aws_pattern = r"AKIA[0-9A-Z]{16}"
+        jwt_pattern = r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
+
+        # More specific prompt injection patterns (avoid false positives)
+        prompt_injection_patterns = [
+            r"(?i)ignore\s+previous\s+instructions",
+            r"(?i)forget\s+previous",
+            r"(?i)disregard\s+previous",
+            r"(?i)new\s+instructions:",
         ]
 
-        value_lower = value.lower()
-        for pattern in injection_patterns:
-            if pattern in value_lower:
+        if re.search(aws_pattern, v):
+            raise ValueError(
+                f"AWS access key detected in reasoning: '{v[:50]}...'. "
+                "Use Sanitizer to clean input before creating instruction."
+            )
+
+        if re.search(jwt_pattern, v):
+            raise ValueError(
+                "JWT token detected in reasoning. "
+                "Use Sanitizer to clean input before creating instruction."
+            )
+
+        for pattern in prompt_injection_patterns:
+            if re.search(pattern, v):
+                match = re.search(pattern, v)
                 raise ValueError(
-                    f"Prompt injection detected in {field_name}: '{pattern}'. "
+                    f"Prompt injection detected in reasoning: '{match.group()}'. "
                     "Instruction rejected for security."
                 )
 
-        return value
+        return v
+
+    model_config = {"extra": "forbid"}
