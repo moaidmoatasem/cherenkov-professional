@@ -1,3 +1,4 @@
+from unittest.mock import Mock, patch
 from daqiq.ai_workflows_orchestrator import orchestrate_ai_workflows
 
 
@@ -45,3 +46,12 @@ def test_orchestrate_ai_workflows_returns_summary():
     assert steps[2]["status"] == "error"
     assert steps[2]["result"] is None
     assert steps[2]["error"] is not None
+
+def test_orchestrator_with_mock():
+    """Test orchestrator without real LLM calls"""
+    with patch('crewai.LLM') as mock_llm:
+        mock_llm.return_value = Mock()
+        # Test orchestrator initialization
+        # orchestrator = WorkflowOrchestrator()
+        # assert orchestrator is not None
+        pass  # Placeholder for actual test

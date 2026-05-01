@@ -1,3 +1,4 @@
+import logging
 """
 AI Workflows Orchestrator for daqiq.
 
@@ -9,6 +10,9 @@ TODO:
 
 from typing import Callable, Dict, Any, List
 from daqiq.ai_workflows_orchestrator import orchestrate_ai_workflows
+
+
+logger = logging.getLogger(__name__)
 
 def echo_agent(payload):
     return {"echo": payload}
