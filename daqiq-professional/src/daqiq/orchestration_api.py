@@ -114,10 +114,22 @@ class WorkflowExecutor:
         
         return self.results
     
+
+    def collect_metrics(self) -> Dict[str, Any]:
+        """Collect execution metrics"""
+        return {
+            'agents_deployed': len(self.agents),
+            'tasks_executed': len(self.results),
+            'workflow_name': self.config.get('name', 'unknown'),
+            'execution_mode': self.config.get('execution', {}).get('mode', 'sequential')
+        }
+
     def generate_report(self) -> Dict[str, Any]:
         """Generate execution report"""
+        metrics = self.collect_metrics()
         return {
             'workflow': self.config.get('name', 'Unknown'),
+            'metrics': metrics,
             'agents_used': len(self.agents),
             'tasks_completed': len(self.results),
             'results': self.results
@@ -167,10 +179,22 @@ class WorkflowExecutor:
         
         return self.results
     
+
+    def collect_metrics(self) -> Dict[str, Any]:
+        """Collect execution metrics"""
+        return {
+            'agents_deployed': len(self.agents),
+            'tasks_executed': len(self.results),
+            'workflow_name': self.config.get('name', 'unknown'),
+            'execution_mode': self.config.get('execution', {}).get('mode', 'sequential')
+        }
+
     def generate_report(self) -> Dict[str, Any]:
         """Generate execution report"""
+        metrics = self.collect_metrics()
         return {
             'workflow': self.config.get('name', 'Unknown'),
+            'metrics': metrics,
             'agents_used': len(self.agents),
             'tasks_completed': len(self.results),
             'results': self.results
