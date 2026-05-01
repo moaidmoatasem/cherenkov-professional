@@ -52,7 +52,7 @@ class AgentRegistry:
         return list(self._agents.keys())
 
 
-def orchestrate_ai_workflows(context: Dict[str, Any]) -> None:
+def orchestrate_ai_workflows(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Entry point for AI workflows orchestration.
 
@@ -61,6 +61,7 @@ def orchestrate_ai_workflows(context: Dict[str, Any]) -> None:
                       - project_name: str
                       - roadmap: list[dict] (high-level tasks/steps)
                       - agents: dict[str, AgentFn] or similar
+    :return: Orchestration summary with per-step results.
     """
     # 1. Validate context
     required_keys = ["project_name", "roadmap", "agents"]
@@ -88,27 +89,61 @@ def orchestrate_ai_workflows(context: Dict[str, Any]) -> None:
 
     # 3. Simple run loop stub over roadmap steps
     print(f"[daqiq-ai] Starting orchestration for project: {project_name}")
+
+    step_results: List[Dict[str, Any]] = []
+
     for idx, step in enumerate(roadmap, start=1):
         step_name = step.get("name", f"step-{idx}")
         agent_name = step.get("agent")
+        agent_input = step.get("input", {})
+
         print(f"[daqiq-ai] Executing step {idx}: {step_name} using agent '{agent_name}'")
 
+        result_record: Dict[str, Any] = {
+            "index": idx,
+            "name": step_name,
+            "agent": agent_name,
+            "input": agent_input,
+            "status": "pending",
+            "result": None,
+            "error": None,
+        }
+
         if not agent_name:
-            print(f"[daqiq-ai] Skipping step {idx}: no agent specified")
+            msg = "No agent specified"
+            print(f"[daqiq-ai] Skipping step {idx}: {msg}")
+            result_record["status"] = "skipped"
+            result_record["error"] = msg
+            step_results.append(result_record)
             continue
 
         try:
             agent_fn = registry.get(agent_name)
         except ValueError as exc:
-            print(f"[daqiq-ai] Error: {exc}")
+            msg = str(exc)
+            print(f"[daqiq-ai] Error: {msg}")
+            result_record["status"] = "error"
+            result_record["error"] = msg
+            step_results.append(result_record)
             continue
 
-        # In a real implementation we would pass richer context and handle outputs.
-        agent_input = step.get("input", {})
         try:
-            result = agent_fn(agent_input)
-            print(f"[daqiq-ai] Step {idx} completed with result: {result}")
+            output = agent_fn(agent_input)
+            print(f"[daqiq-ai] Step {idx} completed with result: {output}")
+            result_record["status"] = "completed"
+            result_record["result"] = output
         except Exception as exc:  # noqa: BLE001
-            print(f"[daqiq-ai] Step {idx} failed with error: {exc}")
+            msg = str(exc)
+            print(f"[daqiq-ai] Step {idx} failed with error: {msg}")
+            result_record["status"] = "error"
+            result_record["error"] = msg
+
+        step_results.append(result_record)
 
     print(f"[daqiq-ai] Orchestration finished for project: {project_name}")
+
+    return {
+        "project_name": project_name,
+        "total_steps": len(roadmap),
+        "steps": step_results,
+    }
