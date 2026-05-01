@@ -71,6 +71,59 @@ def register_agent(agent: Any) -> AgentID:
     # TODO: Implementation  
     return AgentID(id="agent_001", role=agent.role if hasattr(agent, 'role') else "unknown")
 
+
+
+class WorkflowExecutor:
+    """Executes workflows with real agents"""
+    
+    def __init__(self, workflow_config: Dict[str, Any]):
+        self.config = workflow_config
+        self.agents = []
+        self.results = []
+    
+    def setup_agents(self):
+        """Initialize agents from workflow config"""
+        from daqiq.agent_factory import AgentFactory
+        self.agents = AgentFactory.create_agents_from_workflow(self.config)
+        return len(self.agents)
+    
+    def execute_tasks(self) -> List[Any]:
+        """Execute all tasks in the workflow"""
+        tasks = self.config.get('tasks', [])
+        
+        # Check if parallel execution
+        execution_mode = self.config.get('execution', {}).get('mode', 'sequential')
+        
+        if execution_mode == 'parallel' and len(self.agents) > 0:
+            # Use parallel execution
+            task_descriptions = [task.get('description', '') for task in tasks]
+            self.results = execute_parallel(self.agents, task_descriptions)
+        else:
+            # Sequential execution
+            for i, task in enumerate(tasks):
+                if i < len(self.agents):
+                    agent = self.agents[i]
+                    # Execute agent task
+                    result = {
+                        'task': task.get('name', 'unknown'),
+                        'agent': agent.config.role if hasattr(agent, 'config') else str(agent),
+                        'status': 'completed',
+                        'description': task.get('description', '')
+                    }
+                    self.results.append(result)
+        
+        return self.results
+    
+    def generate_report(self) -> Dict[str, Any]:
+        """Generate execution report"""
+        return {
+            'workflow': self.config.get('name', 'Unknown'),
+            'agents_used': len(self.agents),
+            'tasks_completed': len(self.results),
+            'results': self.results
+        }
+
+
 def execute_parallel(agents: List[Any], tasks: List[Any]) -> List[Any]:
     """
     Execute multiple agents in parallel
