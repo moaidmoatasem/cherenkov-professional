@@ -3,6 +3,10 @@ Orchestration API - Public interface for running AI workflows
 """
 from typing import Dict, List, Any
 from dataclasses import dataclass
+import uuid
+from datetime import datetime
+
+AGENT_REGISTRY: Dict[str, Any] = {}
 
 @dataclass
 class WorkflowResult:
@@ -19,15 +23,6 @@ class AgentID:
     role: str
 
 def orchestrate_workflow(config: Dict) -> WorkflowResult:
-    """
-    Execute an AI workflow based on configuration
-    
-    Args:
-        config: Workflow configuration dict
-    
-    Returns:
-        WorkflowResult with execution details
-    """
     """
     Execute an AI workflow based on configuration
     
@@ -77,16 +72,6 @@ def register_agent(agent: Any) -> AgentID:
     return AgentID(id="agent_001", role=agent.role if hasattr(agent, 'role') else "unknown")
 
 def execute_parallel(agents: List[Any], tasks: List[Any]) -> List[Any]:
-    """
-    Execute multiple agents in parallel
-    
-    Args:
-        agents: List of agent instances
-        tasks: List of tasks to execute
-    
-    Returns:
-        List of results from each agent
-    """
     """
     Execute multiple agents in parallel
     
