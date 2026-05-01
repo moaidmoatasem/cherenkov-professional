@@ -10,11 +10,31 @@ def cli():
     pass
 
 @cli.command()
-@click.option('--config', required=True, help='Workflow config file')
-def orchestrate(config):
-    """Run an orchestration workflow"""
+@click.option('--config', required=True, help='Workflow config file (YAML)')
+@click.option('--output', default='results.json', help='Output file')
+def orchestrate(config, output):
+    """Run an orchestration workflow from YAML file"""
     click.echo(f"🎯 Orchestrating workflow from {config}")
-    # TODO: Call orchestrate_workflow(config)
+    
+    try:
+        from daqiq.workflow_parser import load_workflow
+        from daqiq.orchestration_api import orchestrate_workflow
+        
+        # Load workflow YAML
+        workflow_config = load_workflow(config)
+        click.echo(f"   Loaded: {workflow_config.get('name', 'Unnamed')}")
+        
+        # Execute workflow
+        result = orchestrate_workflow(workflow_config)
+        
+        if result.success:
+            click.echo(f"✅ Workflow completed in {result.duration:.2f}s")
+            click.echo(f"   Results saved to {output}")
+        else:
+            click.echo(f"❌ Workflow failed: {result.errors}")
+    
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
 
 @cli.command()
 @click.option('--role', required=True, help='Agent role')
