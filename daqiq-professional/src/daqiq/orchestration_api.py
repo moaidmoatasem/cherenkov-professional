@@ -128,8 +128,10 @@ class WorkflowExecutor:
         """Generate execution report"""
         metrics = self.collect_metrics()
         metrics = self.collect_metrics()
+        metrics = self.collect_metrics()
         return {
             'workflow': self.config.get('name', 'Unknown'),
+            'metrics': metrics,
             'metrics': metrics,
             'metrics': metrics,
             'agents_used': len(self.agents),
@@ -195,8 +197,10 @@ class WorkflowExecutor:
         """Generate execution report"""
         metrics = self.collect_metrics()
         metrics = self.collect_metrics()
+        metrics = self.collect_metrics()
         return {
             'workflow': self.config.get('name', 'Unknown'),
+            'metrics': metrics,
             'metrics': metrics,
             'metrics': metrics,
             'agents_used': len(self.agents),
