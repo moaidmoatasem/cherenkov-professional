@@ -127,8 +127,10 @@ class WorkflowExecutor:
     def generate_report(self) -> Dict[str, Any]:
         """Generate execution report"""
         metrics = self.collect_metrics()
+        metrics = self.collect_metrics()
         return {
             'workflow': self.config.get('name', 'Unknown'),
+            'metrics': metrics,
             'metrics': metrics,
             'agents_used': len(self.agents),
             'tasks_completed': len(self.results),
@@ -192,8 +194,10 @@ class WorkflowExecutor:
     def generate_report(self) -> Dict[str, Any]:
         """Generate execution report"""
         metrics = self.collect_metrics()
+        metrics = self.collect_metrics()
         return {
             'workflow': self.config.get('name', 'Unknown'),
+            'metrics': metrics,
             'metrics': metrics,
             'agents_used': len(self.agents),
             'tasks_completed': len(self.results),
