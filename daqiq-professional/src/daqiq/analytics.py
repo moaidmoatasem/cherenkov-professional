@@ -87,27 +87,18 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 """
         for name, data in stats.get('workflows', {}).items():
-            report += f"### {name}
-"
-            report += f"- Executions: {data['executions']}
-"
-            report += f"- Last Run: {data['last_run']}
-
-"
+            report += f"### {name}\n"
+            report += f"- Executions: {data['executions']}\n"
+            report += f"- Last Run: {data['last_run']}\n"
         
-        report += "## Performance Metrics
+        report += "## Performance Metrics\n\n"
 
-"
         if 'avg_duration' in perf:
-            report += f"- Average Duration: {perf['avg_duration']:.4f}s
-"
-            report += f"- Fastest: {perf['min_duration']:.4f}s
-"
-            report += f"- Slowest: {perf['max_duration']:.4f}s
-"
+            report += f"- Average Duration: {perf['avg_duration']:.4f}s\n"
+            report += f"- Fastest: {perf['min_duration']:.4f}s\n"
+            report += f"- Slowest: {perf['max_duration']:.4f}s\n"
         else:
-            report += f"- {perf.get('message', 'No data')}
-"
+            report += f"- {perf.get('message', 'No data')}\n"
         
         return report
 
