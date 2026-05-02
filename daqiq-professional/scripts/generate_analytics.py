@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Generate analytics report from workflow results"""
+
 import sys
-sys.path.insert(0, 'src')
+
+sys.path.insert(0, "src")
 
 from daqiq.analytics import generate_analytics_report
 
