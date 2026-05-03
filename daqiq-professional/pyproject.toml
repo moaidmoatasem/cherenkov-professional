@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daqiq"
+version = "0.1.1"
+description = "Local-first AI security testing framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Moayed Badawy", email = "moaid@example.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+ai = [
+    "crewai>=0.28.0",
+    "langchain-community>=0.0.20",
+]
+web = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "bandit>=1.7.8",
+    "pre-commit>=3.7.0",
+]
+
+[project.scripts]
+daqiq = "daqiq.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/moaidmoatasem/daqiq-professional"
+Documentation = "https://github.com/moaidmoatasem/daqiq-professional/blob/main/docs"
+Repository = "https://github.com/moaidmoatasem/daqiq-professional"
+Issues = "https://github.com/moaidmoatasem/daqiq-professional/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "T10", "ICN", "PIE", "PT", "RET", "SIM", "ARG", "PL", "RUF"]
+ignore = ["S105", "S106", "S107"]  # Ignore false positives for hardcoded passwords in enum literals
+
+[tool.coverage.run]
+source = ["daqiq"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+fail_under = 25  # HONEST - Current state (Phase 1)
+# Target progression:
+# Phase 1: 25% → Phase 2: 35% → Phase 3: 50% → Phase 4: 65% → v1.0: 80%
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+addopts = "--cov=daqiq --cov-report=term-missing --cov-report=html"

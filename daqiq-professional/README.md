@@ -1,233 +1,127 @@
-# 🛡️ DAQIQ - Local AI Security Framework
+# DAQIQ — Local AI Security Testing Framework
 
-![Version](https://img.shields.io/badge/version-v0.1.1--alpha-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Tests](https://img.shields.io/badge/tests-passing-green)
-![Coverage](https://img.shields.io/badge/coverage-30%25-yellow)
-![License](https://img.shields.io/badge/license-MIT-green)
+> **Alpha stage** • 3 working scanners • Built for security engineers who want AI-assisted testing without cloud dependencies
 
-**Status**: 🚧 Early Alpha - Foundation Phase
+[![Security](https://img.shields.io/badge/security-v0.1.1--patched-green)](SECURITY.md)
+[![Tests](https://img.shields.io/badge/coverage-30%25-yellow)]()
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 
-Local-first security scanning framework with AI integration. Built for developers who want privacy-respecting security tools.
+**Current Status:** 🚧 v0.1.1-alpha — Phase 1 of 6-month roadmap
 
 ---
 
-## 🎯 What Actually Works Today (v0.1.1)
+## What Actually Works Today
 
-### ✅ Core Features
-- **3 working security scanners**:
-  - HTTP security headers (5 checks)
-  - HTTP methods detection (OPTIONS, PUT, DELETE, TRACE)
-  - HTTPS/HTTP validation
-- **Web interface**: Flask dashboard for running scans
-- **CLI tool**: Basic command-line scanner
-- **Local AI integration**: Ollama support (tinyllama model)
-- **60 unit tests**: 30% code coverage
+✅ **3 HTTP Security Scanners**
+- Security headers (X-Frame-Options, CSP, HSTS, etc.)
+- HTTP methods (TRACE, PUT, DELETE testing)
+- TLS/HTTPS validation
 
-### 🔐 Security Features (v0.1.1)
-- ✅ XSS protection in web interface
-- ✅ Debug mode disabled by default
-- ✅ URL validation and sanitization
-- ✅ Localhost-only binding (configurable)
-- ✅ Input validation on all endpoints
+✅ **Basic Infrastructure**
+- CLI: `daqiq scan <url>`
+- Web dashboard (localhost-only, security hardened)
+- Local Ollama integration (experimental scaffold)
+
+✅ **Security Hardened**
+- All critical vulnerabilities from v0.1.0 patched
+- No debug mode, localhost binding only
+- Input validation on all user-supplied data
 
 ---
 
-## 🚀 Quick Start
+## What Doesn't Work Yet
 
-### Prerequisites
-- Python 3.10 or higher
-- 2GB RAM minimum
-- (Optional) Ollama for AI features
+❌ CrewAI multi-agent orchestration (Phase 4 - Week 12)  
+❌ 132 scanners (Phase 3 target: 50+)  
+❌ PII redaction engine (not implemented)  
+❌ Dual-brain architecture (Phase 4 - Week 14)  
+❌ SARIF output (Phase 5 - Week 20)  
 
-### Installation
+---
+
+## Honest Metrics
+
+| Metric | Current | Target (v1.0) |
+|--------|---------|---------------|
+| Working scanners | **3** | 50+ |
+| Test coverage | **~30%** | 80% |
+| Lines of code | **~1,500** | ~15,000 |
+| Security validated | ✅ | ✅ |
+| Production ready | ❌ | ✅ |
+
+---
+
+## Quick Start
 
 ```bash
-# Clone repository
-git clone https://github.com/moaidmoatasem/daqiq-professional.git
+# Clone
+git clone https://github.com/moaidmoatasem/daqiq-professional
 cd daqiq-professional
 
-# Install dependencies
+# Install
 pip install -e .
 
-# Run basic scan
-python -m daqiq.cli scan https://example.com
-
-# Or start web interface
-python daqiq_web.py
-# Open http://localhost:5000
+# Run your first scan
+daqiq scan https://example.com
 ```
 
-### Docker (Coming Soon)
-Docker support is planned for v0.2.0
+### With Docker
 
----
-
-## 📊 Honest Metrics
-
-| Metric | Current | Target |
-|--------|---------|--------|
-| Working Scanners | 3 | 50+ by v1.0 |
-| Test Coverage | 30% | 80% by v1.0 |
-| Lines of Code | ~1,500 | - |
-| Development Time | ~10 hours | - |
-| Contributors | 1 | Open to PRs! |
-
----
-
-## 🗺️ Roadmap
-
-### v0.1.1 (Current) - Security Patch
-- ✅ Fix critical security vulnerabilities
-- ✅ Add SECURITY.md policy
-- ✅ Align documentation with reality
-
-### v0.2.0 (Week 2) - Foundation Complete
-- 🔄 Enhanced PII detection
-- 🔄 Structured logging
-- 🔄 50% test coverage
-- 📋 CONTRIBUTING.md
-- 📋 CI/CD pipeline
-
-### v0.3.0 (Month 1) - Scanner Expansion
-- 📋 20 working scanners
-- 📋 60% test coverage
-- 📋 Docker support
-- 📋 API documentation
-
-### v1.0.0 (Month 6) - Production Ready
-- 📋 50+ scanners
-- 📋 80% test coverage
-- 📋 CrewAI multi-agent orchestration
-- 📋 Comprehensive documentation
-- 📋 Security audit complete
-
-**Legend**: ✅ Complete | 🔄 In Progress | 📋 Planned
-
----
-
-## 🔧 Configuration
-
-Create `.env` file (optional):
-
-```env
-# Flask web interface
-FLASK_DEBUG=false           # Never true in production!
-FLASK_HOST=127.0.0.1        # Localhost only (use 0.0.0.0 to expose)
-FLASK_PORT=5000
-
-# Ollama AI (optional)
-OLLAMA_MODEL=tinyllama      # Fast, low-RAM model
-OLLAMA_HOST=http://localhost:11434
-
-# Scanning options
-ALLOW_LOCALHOST_SCAN=false  # Enable to scan localhost URLs
+```bash
+docker build -t daqiq .
+docker run --rm daqiq scan https://example.com
 ```
 
 ---
 
-## 🛡️ Security
+## Development Roadmap
 
-**v0.1.1 fixes critical vulnerabilities from v0.1.0:**
-- Remote Code Execution via Flask debug mode (CVSS 9.8) ✅ Fixed
-- Stored XSS in web interface (CVSS 7.5) ✅ Fixed  
-- Silent exception handling causing false negatives (CVSS 5.0) ✅ Fixed
+**6-Month Plan to v1.0**
 
-**See [SECURITY.md](SECURITY.md) for:**
-- Vulnerability disclosure policy
-- Security best practices
-- Contact information
+- [x] **Phase 0**: Critical security fixes *(Week 0)* ✅
+- [ ] **Phase 1**: Repository cleanup *(Weeks 1-2)*
+- [ ] **Phase 2**: Architecture overhaul *(Weeks 2-4)*
+- [ ] **Phase 3**: 50+ validated scanners *(Weeks 4-10)*
+- [ ] **Phase 4**: AI integration *(Weeks 10-18)*
+- [ ] **Phase 5**: Production hardening *(Weeks 18-26)*
 
-**⚠️ Important**: This is an early-stage security tool. Do not use for production security assessments yet. Only scan targets you own or have permission to test.
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! This is an early-stage project that needs:
-
-- [ ] More scanner implementations
-- [ ] Test coverage improvements
-- [ ] Documentation
-- [ ] Bug reports and fixes
-- [ ] Security reviews
-
-**How to contribute:**
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for your changes
-4. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) (coming soon)
+See [docs/ROADMAP.md](docs/ROADMAP.md) for details.
 
 ---
 
-## 📖 Documentation
+## Architecture (Planned - Phase 2)
 
-- [Installation Guide](docs/installation.md) (coming soon)
-- [API Reference](docs/api.md) (coming soon)
-- [Architecture](docs/architecture.md) (coming soon)
 
 ---
 
-## 🎯 Project Vision (Long-term)
+## Contributing
 
-DAQIQ aims to become a comprehensive local-first security framework with:
-- 100+ automated security scanners
-- AI-powered vulnerability detection
-- Multi-agent orchestration (CrewAI)
-- Zero-cloud-dependency architecture
-- PII redaction and secret detection
-- Autonomous code generation for new scanners
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- How to add a new scanner
+- Testing requirements (DVWA validation)
+- Code style guide
 
-**Current status**: Foundation phase. We're building the basics right first.
+**Good first issues**: [Scanner requests](https://github.com/moaidmoatasem/daqiq-professional/labels/scanner-request)
 
 ---
 
-## 📊 AI Model Benchmarks
+## Security
 
-| Model | Speed | RAM | Status |
-|-------|-------|-----|--------|
-| tinyllama | 8.47s | 637MB | ✅ Default |
-| qwen2.5-coder:3b | 97.98s | 2.1GB | ⚠️ Slow |
-| Larger models | >120s | >4GB | ❌ Not recommended |
+**Vulnerability Disclosure**: See [SECURITY.md](SECURITY.md)
 
-**Note**: AI features are optional. Core scanners work without AI.
+**Recent Patches**:
+- v0.1.1-security: Fixed RCE, XSS, and exception handling vulnerabilities
 
 ---
 
-## 📄 License
+## License
 
-MIT License - See [LICENSE](LICENSE)
-
----
-
-## 🙏 Acknowledgments
-
-- Security review feedback from the community
-- CrewAI framework for multi-agent architecture inspiration
-- Ollama for local LLM infrastructure
+MIT License - see [LICENSE](LICENSE)
 
 ---
 
-## 📞 Contact
+## Acknowledgments
 
-- **Issues**: [GitHub Issues](https://github.com/moaidmoatasem/daqiq-professional/issues)
-- **Security**: See [SECURITY.md](SECURITY.md)
-- **Discussions**: [GitHub Discussions](https://github.com/moaidmoatasem/daqiq-professional/discussions)
+Built with honesty. Inspired by the need for local-first security testing.
 
----
-
-## ⚠️ Disclaimer
-
-This is an alpha-stage security tool under active development. Use at your own risk. Always:
-- Test on authorized targets only
-- Verify scan results manually
-- Keep dependencies updated
-- Review SECURITY.md before deployment
-
-**Not recommended for production security assessments yet.**
-
----
-
-**Built with ❤️ for security-conscious developers who value privacy**
+Not ready for production yet. Check back in 6 months for v1.0.

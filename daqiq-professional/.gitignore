@@ -7,3 +7,16 @@ logs/
 output/
 .coverage
 .pytest_cache/
+
+# Development artifacts (do not commit)
+*_ACHIEVEMENTS.md
+AGENT_MEMORY.md
+*.backup
+SESSION_*.md
+TONIGHT_*.md
+PROJECT_SUMMARY.md
+
+# AI agent outputs (logs only, not source code)
+swarm_outputs/
+orchestration_iterations/
+autonomous_development/
