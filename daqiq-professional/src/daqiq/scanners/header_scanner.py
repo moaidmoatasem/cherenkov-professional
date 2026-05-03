@@ -75,7 +75,8 @@ class SimpleScanner:
                     print(f"  [!] {method} is ALLOWED (Status: {response.status_code})")
                 else:
                     print(f"  [✓] {method} is blocked")
-            except:
+            except (requests.exceptions.RequestException, Exception) as e:
+                print(f"  [✓] {method} is blocked (Error: {e})")
                 print(f"  [✓] {method} is blocked")
     
     def scan_ssl_tls(self):
