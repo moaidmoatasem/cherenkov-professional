@@ -1,5 +1,6 @@
-from daqiq.agents.cloud.strategic_planner import StrategicPlanner, ThreatAnalysisTask
 from dotenv import load_dotenv
+
+from daqiq.agents.cloud.strategic_planner import StrategicPlanner, ThreatAnalysisTask
 
 load_dotenv()
 
@@ -13,9 +14,9 @@ task = ThreatAnalysisTask(
         "app_category": "Banking",
         "permissions_count": 15,
         "min_sdk": 21,
-        "target_sdk": 34
+        "target_sdk": 34,
     },
-    analysis_scope=["threat_model", "code_review", "permission_analysis"]
+    analysis_scope=["threat_model", "code_review", "permission_analysis"],
 )
 
 print("🔍 Testing Groq Strategic Planner...\n")

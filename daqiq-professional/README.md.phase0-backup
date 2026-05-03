@@ -1,0 +1,65 @@
+# DAQIQ — Local AI Security Testing Framework
+
+> ⚠️ **Alpha stage** • 3 working scanners • Built for security engineers who want AI-assisted testing without cloud dependencies
+
+**Current Status:** 🚧 v0.1.1-alpha — Phase 1 of 5
+
+## What Actually Works Today
+
+- ✅ 3 HTTP security scanners (headers, methods, HTTPS validation)
+- ✅ Basic CLI (`daqiq scan <url>`)
+- ✅ Web dashboard (localhost only, security hardened)
+- ✅ Local Ollama integration (experimental)
+
+## What Doesn't Work Yet
+
+- ❌ CrewAI orchestration (planned Phase 4)
+- ❌ 132 scanners (target: 50+ by Phase 3)
+- ❌ PII redaction (not implemented)
+- ❌ Dual-brain architecture (Phase 4)
+
+## Honest Metrics
+
+| Metric | Current | Target (v1.0) |
+|--------|---------|---------------|
+| Working scanners | 3 | 50+ |
+| Test coverage | ~30% | 80% |
+| Lines of code | ~1,500 | ~15,000 |
+| Security validated | ✅ | ✅ |
+
+## Installation
+
+```bash
+# Clone
+git clone https://github.com/moaidmoatasem/daqiq-professional
+cd daqiq-professional
+
+# Install
+pip install -e .
+
+# Run a scan
+daqiq scan https://example.com
+```
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability disclosure policy.
+
+**v0.1.1-security**: All critical vulnerabilities from v0.1.0 have been patched.
+
+## Development Roadmap
+
+- [x] **Phase 0**: Security fixes (COMPLETE)
+- [ ] **Phase 1**: Repository cleanup (Weeks 1-2)
+- [ ] **Phase 2**: Architecture overhaul (Weeks 2-4)
+- [ ] **Phase 3**: 50+ validated scanners (Weeks 4-10)
+- [ ] **Phase 4**: AI integration (Weeks 10-18)
+- [ ] **Phase 5**: Production hardening (Weeks 18-26)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## License
+
+MIT

@@ -4,9 +4,9 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from crewai import Agent
-from daqiq.config import DEFAULT_LLM_MODEL
 from pydantic import BaseModel, Field
 
+from daqiq.config import DEFAULT_LLM_MODEL
 from daqiq.core.sanitizer import Sanitizer
 from daqiq.schemas.cloud_instruction import CloudInstruction
 from daqiq.schemas.sanitized_output import SanitizedOutput

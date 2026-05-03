@@ -16,7 +16,7 @@ def xss_scanner(content):
                 return False
         except Exception as e:
             raise ValueError(f"Invalid URL: {e}")
-    
+
     def img_data_validator(img):
         try:
             re_img_data = r"(data:[^;]+;base64,[a-zA-Z0-9+\\-=,./ \)\( ]+)"
@@ -27,24 +27,24 @@ def xss_scanner(content):
                 return False
         except Exception as e:
             raise ValueError(f"Data in img tag is not valid: {e}")
-    
+
     def xss_in_content(content):
         """
         Scan the given content for XSS.
         :param content: Web page or script HTML text to scan.
         :return: List of detected cross-site scripting (XSS) vulnerabilities.
         """
-        
+
         # Potential XSS Patterns
         patterns = [
             r'<script>(.+?)</script>',  # Inline scripts
             r'eval\((.*?)\)/*',         # Common eval
             r'delete*(\w+)',               # DELETE Command
-            r'(?:on(onload|click|mousedown)(?=:(\s*|)))',  # Onload and click etc. commands 
+            r'(?:on(onload|click|mousedown)(?=:(\s*|)))',  # Onload and click etc. commands
         ]
-        
+
         found_vulnerabilities = []
-        
+
         for raw_pattern in patterns:
             pattern = re.compile(raw_pattern, flags=re.I | re.S)
             for match in re.findall(pattern, content):
@@ -52,16 +52,16 @@ def xss_scanner(content):
                 if ('<script>' not in vulnerability) and ("</script>" not in vulnerability):
                     # Ensure the XSS is not a simple script tag.
                     found_vulnerabilities.append(vulnerability)
-                    
+
         return found_vulnerabilities
-    
+
     try:
         vulnerabilities = xss_in_content(content)
-        
+
         # Validate URLs to prevent arbitrary code execution via external resources
         if any(xss for xss in url_validator(content) for content in xss.find_all('a', href=True)):
             raise ValueError("Arbitrary URL injection detected.")
-    
+
         # Ensure img tag data URI scheme does not contain encoded malicious scripts.
         for tag in re.findall(r"(img\b[^>]*src *= *'|\"|`)(?!data:[^;]+;base64,)", content):
             found = xss_in_content(f"
