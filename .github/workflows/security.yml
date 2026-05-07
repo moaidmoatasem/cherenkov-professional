@@ -26,12 +26,21 @@ jobs:
       run: |
         pip install -e ".[dev]"
     
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: pip install -e ".[dev]"
+
     - name: Run Snyk Security Scan
       uses: snyk/actions/python@master
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
         args: --package-manager=pip --file=requirements.txt --severity-threshold=high
+        args: --severity-threshold=high --file=requirements.txt
 
   codeql-analysis:
     runs-on: ubuntu-latest
@@ -50,6 +59,10 @@ jobs:
 
     - name: Perform CodeQL Analysis
       id: analyze
+      uses: github/codeql-action/analyze@v3
+      with:
+        upload: false
+        output: codeql-results
       uses: github/codeql-action/analyze@v4
       with:
         upload: false
@@ -60,3 +73,4 @@ jobs:
       with:
         name: codeql-results
         path: ${{ runner.temp }}/results
+        path: ${{ runner.workspace }}/results
