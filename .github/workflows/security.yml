@@ -15,6 +15,16 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
     
     - name: Run Snyk Security Scan
       uses: snyk/actions/python@master
@@ -22,3 +32,22 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
         args: --file=requirements.txt --severity-threshold=high
+
+  codeql-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: python
+        setup-python-dependencies: false
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
