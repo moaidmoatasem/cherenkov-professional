@@ -12,6 +12,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: pip install -e ".[dev]"
+
     - name: Run Snyk Security Scan
       uses: snyk/actions/python@master
       env:
@@ -36,3 +44,6 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
+      with:
+        upload: false
+        output: codeql-results
