@@ -33,10 +33,11 @@ jobs:
 
     - name: Run unit tests only
       run: |
-        pytest tests/unit/ --cov=mithaq --cov-report=xml || echo "Unit tests failed, proceeding to coverage upload"
+        pytest tests/unit/
         echo "✅ Code quality checks completed"
 
     - name: Upload coverage to Codecov
+      if: always()
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -70,7 +71,7 @@ jobs:
 
     - name: Run Bandit (security linter)
       run: |
-        pip install bandit bandit-sarif-formatter
+        pip install "bandit[sarif]"
         bandit -r src/mithaq -f sarif -o bandit-results.sarif || echo "Bandit found issues"
 
     - name: Run Safety (dependency check)
