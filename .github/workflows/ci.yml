@@ -36,6 +36,13 @@ jobs:
         echo "✅ Skipping integration tests (require LLM connections)"
         echo "✅ Code quality checks completed"
 
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+        verbose: true
+
     - name: Summary
       run: |
         echo "✅ CI checks completed"
