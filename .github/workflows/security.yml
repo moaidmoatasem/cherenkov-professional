@@ -1,6 +1,10 @@
 name: Security Scanning
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   schedule:
     - cron: '0 0 * * 0'  # Weekly on Sunday
   workflow_dispatch:
@@ -27,7 +31,7 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        args: --severity-threshold=high
+        args: --severity-threshold=high --file=requirements.txt
 
   codeql-analysis:
     runs-on: ubuntu-latest
@@ -40,7 +44,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: python
 
@@ -48,3 +52,12 @@ jobs:
       uses: github/codeql-action/analyze@v3
       with:
         upload: false
+      uses: github/codeql-action/analyze@v4
+      with:
+        upload: false
+
+    - name: Upload CodeQL results as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: codeql-results
+        path: ${{ runner.workspace }}/results
