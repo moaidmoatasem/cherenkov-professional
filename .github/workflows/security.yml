@@ -31,7 +31,7 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        args: --severity-threshold=high
+        args: --package-manager=pip --file=requirements.txt --severity-threshold=high
 
   codeql-analysis:
     runs-on: ubuntu-latest
@@ -49,12 +49,14 @@ jobs:
         languages: python
 
     - name: Perform CodeQL Analysis
+      id: analyze
       uses: github/codeql-action/analyze@v4
       with:
         upload: false
+        output: ${{ runner.temp }}/results
 
     - name: Upload CodeQL results as artifact
       uses: actions/upload-artifact@v4
       with:
         name: codeql-results
-        path: ../results
+        path: ${{ runner.temp }}/results
