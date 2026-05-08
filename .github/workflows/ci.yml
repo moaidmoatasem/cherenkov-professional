@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -29,7 +32,7 @@ jobs:
 
     - name: Run Pylint
       run: |
-        pylint src/mithaq --fail-under=7.5 || echo "Pylint score below 7.5 (non-blocking)"
+        pylint src/cherenkov --fail-under=7.5 || echo "Pylint score below 7.5 (non-blocking)"
 
     - name: Run unit tests only
       run: |
