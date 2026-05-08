@@ -1,23 +1,34 @@
 name: Security Scanning
 
-on:
+"on":
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
+    - cron: "0 0 * * 0"  # Weekly on Sunday
   workflow_dispatch:
 
 jobs:
   dependency-scan:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
     - name: Run Snyk Security Scan
       uses: snyk/actions/python@master
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        args: --severity-threshold=high
+        args: --package-manager=pip --file=requirements.txt --severity-threshold=high
+        args: --severity-threshold=high --file=requirements.txt
 
   codeql-analysis:
     runs-on: ubuntu-latest
@@ -27,12 +38,22 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: python
+      - uses: actions/checkout@v4
 
     - name: Perform CodeQL Analysis
+      id: analyze
       uses: github/codeql-action/analyze@v3
+      with:
+        upload: false
+        output: codeql-results
+      uses: github/codeql-action/analyze@v4
+      with:
+        upload: false
+        output: ${{ runner.temp }}/results
+
+    - name: Upload CodeQL results as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: codeql-results
+        path: ${{ runner.temp }}/results
+        path: ${{ runner.workspace }}/results
