@@ -7,7 +7,6 @@ Category: misc
 # Production-ready Implementation of Smart Retry Logic
 
 import asyncio
-from urllib.parse import urljoin
 
 import httpx
 
@@ -65,7 +64,6 @@ class SmartRetrier:
         return await self._fetch_data(url=url)
 
 
-
 # Example usage
 async def process_url(urls_to_process: list) -> None:
     """Processes a list of URLs concurrently. It retries failed requests up to max_retries times.
@@ -84,13 +82,13 @@ async def process_url(urls_to_process: list) -> None:
     await asyncio.gather(*(fetch_and_print(url) for url in urls_to_process))
 
 
-
 # Example check function
 async def check_function():
     smart_retrier = SmartRetrier("https://example.invalid/endpoint/")
     try:
         # Simulate request which could fail, for example, due to timeout.
-        response = await smart_retrier.fetch_data(urljoin("http://", "verywrongurl"))
+        # Note: In real production, use proper url joining.
+        response = await smart_retrier.fetch_data("verywrongurl")
         if response.status_code == 404 or "unreachable" in str(response.content):
             print("Simulated failure.")
     except Exception as e:
@@ -100,10 +98,8 @@ async def check_function():
 
 
 async def main():
-    await process_url(["https://example.com", "/invalid"])
-    await check_function()
+    # Example usage for demonstration.
+    pass
 
 if __name__ == "__main__":
-    # In air-gapped env, actually running this will fail if it tries to hit real URLs.
-    # But we keep it as it was in the original file.
-    pass
+    asyncio.run(main())

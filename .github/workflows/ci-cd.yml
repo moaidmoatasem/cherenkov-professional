@@ -73,21 +73,11 @@ jobs:
       run: |
         pip install "bandit[sarif]"
         bandit -r src/mithaq -f sarif -o bandit-results.sarif || echo "Bandit found issues"
-        pip install bandit
-        bandit -r src/mithaq -f sarif -o bandit-results.sarif || true
 
     - name: Run Safety (dependency check)
       run: |
         pip install safety
         safety check --full-report || true
-
-    - name: Run Trivy security scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -109,4 +99,3 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
         category: 'trivy'
-
