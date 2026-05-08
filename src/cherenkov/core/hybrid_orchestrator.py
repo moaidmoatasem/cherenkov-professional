@@ -13,7 +13,7 @@ from cherenkov.ablation.redactor import DataRedactor, RedactionLevel
 from cherenkov.agents.cloud.strategic_planner import StrategicPlanner, ThreatAnalysisTask
 
 
-class CognitiveLoopException(Exception):
+class CognitiveLoopError(Exception):
     """Exception raised when an agent enters an infinite logic loop."""
 
     pass
@@ -147,7 +147,7 @@ class HybridOrchestrator:
 
             if self.task_tracker.check_loop(target_id, simulated_payload):
                 print(f"[MEISSNER] [AEGIS] Cognitive loop detected for {target_id} with payload {simulated_payload}.")
-                raise CognitiveLoopException(f"Infinite logic loop detected for {target_id}")
+                raise CognitiveLoopError(f"Infinite logic loop detected for {target_id}")
 
             # --- Overseer: AIMD Capacity Check ---
             print(f"   [AEGIS] Current Concurrency Capacity: {self.concurrency_limit}")
@@ -241,7 +241,7 @@ class HybridOrchestrator:
         # In production: This would be an Ollama call
         # Prompt: "Act as a Skeptical Auditor. Identify one logical flaw in this attack chain. If no flaw exists, output 'VALID'."
 
-        attack_chain = finding.get("attack_chain", "N/A")
+        # attack_chain = finding.get("attack_chain", "N/A")
 
         # Simulated "Skeptical Auditor" response
         # We'll assume it's VALID for now but implement the logic structure
