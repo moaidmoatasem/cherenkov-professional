@@ -1,8 +1,8 @@
 name: Security Scanning
 
-on:
+"on":
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
+    - cron: "0 0 * * 0"  # Weekly on Sunday
   workflow_dispatch:
 
 env:
@@ -12,7 +12,7 @@ env:
 jobs:
   dependency-scan:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
     
@@ -31,7 +31,8 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        args: --severity-threshold=high
+        args: --package-manager=pip --file=requirements.txt --severity-threshold=high
+        args: --severity-threshold=high --file=requirements.txt
 
   codeql-analysis:
     runs-on: ubuntu-latest
@@ -41,14 +42,10 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: python
+      - uses: actions/checkout@v4
 
     - name: Perform CodeQL Analysis
+      id: analyze
       uses: github/codeql-action/analyze@v3
       with:
         upload: false
