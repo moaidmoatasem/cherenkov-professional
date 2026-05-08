@@ -1,5 +1,3 @@
-import os
-
 replacements = {
     "CHERENKOV": "CHERENKOV",
     "cherenkov": "cherenkov",
@@ -23,7 +21,7 @@ replacements = {
     "Burhan": "Tokamak",
     "burhan": "tokamak",
     "Sandbox": "Tokamak",
-    "sandbox": "tokamak"
+    "sandbox": "tokamak",
 }
 
 print("Running script")

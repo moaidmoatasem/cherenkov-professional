@@ -20,8 +20,8 @@ def orchestrate(config, output):
     click.echo(f"🎯 Orchestrating workflow from {config}")
 
     try:
-        from cherenkov.workflow_parser import load_workflow
         from cherenkov.orchestration_api import orchestrate_workflow
+        from cherenkov.workflow_parser import load_workflow
 
         # Load workflow YAML
         workflow_config = load_workflow(config)
@@ -89,4 +89,3 @@ def status(id):
 
 if __name__ == "__main__":
     cli()
-

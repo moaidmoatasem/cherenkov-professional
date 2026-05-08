@@ -24,3 +24,4 @@ manifests/cwe_queue.yaml
 
 # Secrets
 .env
+*.json

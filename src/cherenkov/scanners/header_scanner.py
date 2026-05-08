@@ -4,20 +4,37 @@ cherenkov - Simple Security Scanner
 Minimal viable product - Actually works!
 """
 
-import requests
 import argparse
+import asyncio
 import concurrent.futures
-from urllib.parse import urlparse
 import json
 from datetime import datetime
+from typing import List, Optional
+from urllib.parse import urlparse
+
+import requests
+
+from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
 
 
-class SimpleScanner:
+class SimpleScanner(BaseScanner):
     """Basic security scanner that actually works"""
-    
-    def __init__(self, target_url: str):
+
+    def __init__(
+        self,
+        name: str = "SimpleScanner",
+        description: str = "Basic security scanner",
+        target_url: Optional[str] = None,
+    ):
+        super().__init__(name, description)
+        self.target = target_url
+        self.results = {}
+        if target_url:
+            self._setup_target(target_url)
+
+    def _setup_target(self, target_url: str):
         parsed = urlparse(target_url)
-        if parsed.scheme not in ('http', 'https'):
+        if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Unsupported scheme '{parsed.scheme}'. Only http/https are allowed.")
         if not parsed.netloc:
             raise ValueError("Invalid URL: missing hostname.")
@@ -28,7 +45,7 @@ class SimpleScanner:
             "vulnerabilities": [],
         }
 
-    def scan_security_headers(self):
+    def scan_security_headers(self, findings_list: List[Finding]):
         """Check for missing security headers"""
         print(f"\n[*] Scanning security headers for {self.target}")
 
@@ -47,6 +64,7 @@ class SimpleScanner:
 
             for header, purpose in security_headers.items():
                 if header not in headers:
+                    # Update local state for legacy report formatting
                     vuln = {
                         "type": "Missing Security Header",
                         "severity": "Medium",
@@ -54,6 +72,18 @@ class SimpleScanner:
                         "description": f"Missing {header} ({purpose})",
                     }
                     self.results["vulnerabilities"].append(vuln)
+
+                    # Update standardized Finding list
+                    findings_list.append(
+                        Finding(
+                            title=f"Missing Security Header: {header}",
+                            severity=Severity.MEDIUM,
+                            description=f"Missing {header} ({purpose})",
+                            cwe="CWE-693",  # Protection Mechanism Failure
+                            remediation=f"Configure the server to emit the {header} header.",
+                        )
+                    )
+
                     print(f"  [!] MISSING: {header}")
                 else:
                     print(f"  [✓] Found: {header}")
@@ -61,9 +91,9 @@ class SimpleScanner:
         except Exception as e:
             print(f"  [!] Error: {e}")
 
-    def scan_http_methods(self):
+    def scan_http_methods(self, findings_list: List[Finding]):
         """Check for dangerous HTTP methods"""
-        print(f"\n[*] Checking HTTP methods")
+        print("\n[*] Checking HTTP methods")
 
         dangerous_methods = ["PUT", "DELETE", "TRACE", "CONNECT"]
 
@@ -71,9 +101,11 @@ class SimpleScanner:
             try:
                 response = requests.request(method, self.target, timeout=5)
                 return method, response, None
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                    requests.exceptions.SSLError) as e:
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                requests.exceptions.SSLError,
+            ) as e:
                 return method, None, e
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(dangerous_methods)) as executor:
@@ -91,13 +123,24 @@ class SimpleScanner:
                             "description": f"{method} method is allowed",
                         }
                         self.results["vulnerabilities"].append(vuln)
+
+                        findings_list.append(
+                            Finding(
+                                title=f"Dangerous HTTP Method Enabled: {method}",
+                                severity=Severity.HIGH,
+                                description=f"The {method} method is allowed (Status: {response.status_code})",
+                                cwe="CWE-749",
+                                remediation=f"Disable the {method} method in server configuration.",
+                            )
+                        )
+
                         print(f"  [!] {method} is ALLOWED (Status: {response.status_code})")
                     else:
                         print(f"  [✓] {method} is blocked")
-    
-    def scan_ssl_tls(self):
+
+    def scan_ssl_tls(self, findings_list: List[Finding]):
         """Check SSL/TLS configuration"""
-        print(f"\n[*] Checking SSL/TLS")
+        print("\n[*] Checking SSL/TLS")
 
         parsed = urlparse(self.target)
         if parsed.scheme != "https":
@@ -107,9 +150,20 @@ class SimpleScanner:
                 "description": "Site is not using HTTPS",
             }
             self.results["vulnerabilities"].append(vuln)
-            print(f"  [!] Site is using HTTP (insecure)")
+
+            findings_list.append(
+                Finding(
+                    title="Insecure Protocol (HTTP used)",
+                    severity=Severity.HIGH,
+                    description="Site is not using HTTPS",
+                    cwe="CWE-319",
+                    remediation="Enforce HTTPS across all traffic.",
+                )
+            )
+
+            print("  [!] Site is using HTTP (insecure)")
         else:
-            print(f"  [✓] Site is using HTTPS")
+            print("  [✓] Site is using HTTPS")
 
     def generate_report(self):
         """Generate scan report"""
@@ -136,15 +190,43 @@ class SimpleScanner:
 
         print(f"\n📄 Full report saved to: {report_file}")
 
+    async def scan(self, target: str, timeout: float = 10.0) -> ScanResult:
+        """Implement BaseScanner async scan method"""
+        start_time = datetime.now()
+        self._setup_target(target)
+
+        findings: List[Finding] = []
+
+        # In a fully asynchronous refactor, these would use aiohttp or httpx
+        # For compatibility with legacy behavior, running them synchronously here
+        # or via threadpool would be ideal, but for the MVP, direct call is fine.
+        loop = asyncio.get_event_loop()
+
+        await loop.run_in_executor(None, self.scan_security_headers, findings)
+        await loop.run_in_executor(None, self.scan_http_methods, findings)
+        await loop.run_in_executor(None, self.scan_ssl_tls, findings)
+
+        end_time = datetime.now()
+        duration_ms = (end_time - start_time).total_seconds() * 1000
+
+        return ScanResult(
+            target=target,
+            scanner_name=self.name,
+            findings=findings,
+            duration_ms=duration_ms,
+            status="completed",
+        )
+
     def run(self):
         """Run all scans"""
         print("=" * 70)
         print("🔍 cherenkov SECURITY SCANNER")
         print("=" * 70)
 
-        self.scan_security_headers()
-        self.scan_http_methods()
-        self.scan_ssl_tls()
+        findings = []
+        self.scan_security_headers(findings)
+        self.scan_http_methods(findings)
+        self.scan_ssl_tls(findings)
         self.generate_report()
 
 
@@ -156,4 +238,3 @@ if __name__ == "__main__":
 
     scanner = SimpleScanner(args.url)
     scanner.run()
-

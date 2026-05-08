@@ -4,11 +4,13 @@ Implements ReAct (Reasoning + Acting) loop with dual-brain architecture.
 """
 
 import time
-from typing import Dict, List, Any, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from cherenkov.agents.cloud.strategic_planner import StrategicPlanner, ThreatAnalysisTask
+
 from cherenkov.ablation.redactor import DataRedactor, RedactionLevel
+from cherenkov.agents.cloud.strategic_planner import StrategicPlanner, ThreatAnalysisTask
 
 
 class CognitiveLoopException(Exception):
@@ -63,7 +65,7 @@ class HybridOrchestrator:
         self.cloud_planner = StrategicPlanner(api_key=groq_api_key)
         self.redactor = DataRedactor(level=RedactionLevel.MODERATE)
         self.execution_history: List[TaskResult] = []
-        
+
         # Al-Hakam Overseer State
         self.concurrency_limit = 4
         self.consecutive_successes = 0
@@ -89,7 +91,7 @@ class HybridOrchestrator:
             Audit results with findings
         """
 
-        print(f"\n🚀 Starting Hybrid Security Audit")
+        print("\n🚀 Starting Hybrid Security Audit")
         print(f"   Target: {target_type}")
         print(f"   Mode: {mode.value}")
         print(f"   Scope: {', '.join(analysis_scope)}\n")
@@ -102,9 +104,7 @@ class HybridOrchestrator:
             print("   ⚠️  FAIL-CLOSED: Data not safe for cloud. Using local-only mode.")
             mode = ExecutionMode.LOCAL_ONLY
         else:
-            print(
-                f"   ✅ Redacted {len(redaction_result.redacted_fields)} sensitive fields"
-            )
+            print(f"   ✅ Redacted {len(redaction_result.redacted_fields)} sensitive fields")
 
         # Step 2: Cloud strategic planning (if hybrid/cloud mode)
         strategic_plan = None
@@ -115,9 +115,7 @@ class HybridOrchestrator:
             print("\n☁️  Step 2: Requesting strategic plan from cloud...")
 
             # Create breadcrumb for cloud
-            breadcrumb = self.redactor.create_breadcrumb(
-                local_context, metadata_only=True
-            )
+            breadcrumb = self.redactor.create_breadcrumb(local_context, metadata_only=True)
 
             task = ThreatAnalysisTask(
                 target_type=target_type,
@@ -137,19 +135,21 @@ class HybridOrchestrator:
 
         if mode in [ExecutionMode.LOCAL_ONLY, ExecutionMode.HYBRID]:
             print("\n🔧 Step 3: Executing privileged local analysis...")
-            
+
             # --- Overseer: Loop Detection ---
             # Simulated target/payload for detection
             target_id = f"{target_type}_instance"
             simulated_payload = analysis_scope[0] if analysis_scope else "default_recon"
-            
+
             if self.task_tracker.check_loop(target_id, simulated_payload):
-                print(f"[MEISSNER] [Al-Hakam] Cognitive loop detected for {target_id} with payload {simulated_payload}.")
+                print(
+                    f"[MEISSNER] [Al-Hakam] Cognitive loop detected for {target_id} with payload {simulated_payload}."
+                )
                 raise CognitiveLoopException(f"Infinite logic loop detected for {target_id}")
 
             # --- Overseer: AIMD Capacity Check ---
             print(f"   [Al-Hakam] Current Concurrency Capacity: {self.concurrency_limit}")
-            
+
             # Simulate local analysis
             local_findings = {
                 "vulnerabilities_found": 3,
@@ -157,21 +157,21 @@ class HybridOrchestrator:
                 "high_count": 2,
                 "scanned_files": len(local_context),
                 "execution_time": "2.3s",
-                "attack_chain": "Exposed RDP -> Weak Credentials -> RCE"
+                "attack_chain": "Exposed RDP -> Weak Credentials -> RCE",
             }
-            
+
             # --- Overseer: Adversarial Review ---
             is_valid = self.verify_finding_logic(target_id, local_findings)
-            
+
             if not is_valid:
-                print(f"[MEISSNER] [Al-Hakam] Dropping finding due to adversarial failure.")
-                local_findings = {"vulnerabilities_found": 0} # Strip invalid findings
+                print("[MEISSNER] [Al-Hakam] Dropping finding due to adversarial failure.")
+                local_findings = {"vulnerabilities_found": 0}  # Strip invalid findings
 
             # --- Overseer: AIMD Feedback ---
             # For simulation, we assume success unless a specific error occurs
             self.handle_inference_result(success=True)
 
-            print(f"   ✅ Local analysis complete")
+            print("   ✅ Local analysis complete")
 
         # Step 4: Combine results
         print("\n📊 Step 4: Combining results...")
@@ -184,12 +184,8 @@ class HybridOrchestrator:
                 "engine": "CHERENKOV Engine",
                 "artifact": "Cherenkov Trace",
                 "trace_id": f"CT-{time.strftime('%Y')}-{len(self.execution_history):03d}",
-                "cryptographic_anchor": {
-                    "perimeter_status": "MEISSNER Zero-Egress Verified"
-                },
-                "strategic_plan": (
-                    strategic_plan if strategic_plan else "Local-only mode"
-                ),
+                "cryptographic_anchor": {"perimeter_status": "MEISSNER Zero-Egress Verified"},
+                "strategic_plan": (strategic_plan if strategic_plan else "Local-only mode"),
                 "local_findings": local_findings,
                 "redaction_summary": {
                     "redacted_fields": redaction_result.redacted_fields,
@@ -204,7 +200,7 @@ class HybridOrchestrator:
 
         self.execution_history.append(result)
 
-        print(f"\n✅ Audit complete!")
+        print("\n✅ Audit complete!")
         print(f"   Mode: {mode.value}")
         print(f"   Tokens used: {tokens_used}")
         print(f"   Redacted fields: {len(redaction_result.redacted_fields)}")
@@ -220,33 +216,37 @@ class HybridOrchestrator:
             old_limit = self.concurrency_limit
             self.concurrency_limit = max(1, self.concurrency_limit // 2)
             self.consecutive_successes = 0
-            print(f"[MEISSNER] Egress Blocked / Zero-egress verified. Reducing concurrency: {old_limit} -> {self.concurrency_limit}")
+            print(
+                f"[MEISSNER] Egress Blocked / Zero-egress verified. Reducing concurrency: {old_limit} -> {self.concurrency_limit}"
+            )
         else:
             # Additive Increase tracking
             self.consecutive_successes += 1
             if self.consecutive_successes >= 5:
                 self.concurrency_limit += 1
                 self.consecutive_successes = 0
-                print(f"[MEISSNER] Consistent performance. Increasing capacity: {self.concurrency_limit}")
+                print(
+                    f"[MEISSNER] Consistent performance. Increasing capacity: {self.concurrency_limit}"
+                )
 
     def verify_finding_logic(self, target: str, finding: Dict[str, Any]) -> bool:
         """
         Adversarial Review: Asks a local model to find logical flaws in the attack chain.
         """
         print(f"\n🕵️  Adversarial Review: Verifying finding for {target}...")
-        
+
         # Simulating local model call with skeptical prompt
         # In production: This would be an Ollama call
         # Prompt: "Act as a Skeptical Auditor. Identify one logical flaw in this attack chain. If no flaw exists, output 'VALID'."
-        
+
         attack_chain = finding.get("attack_chain", "N/A")
-        
+
         # Simulated "Skeptical Auditor" response
         # We'll assume it's VALID for now but implement the logic structure
-        audit_response = "VALID" 
-        
+        audit_response = "VALID"
+
         if audit_response == "VALID":
-            print(f"   ✅ [Al-Hakam] Finding verified. Proceeding to TOKAMAK.")
+            print("   ✅ [Al-Hakam] Finding verified. Proceeding to TOKAMAK.")
             return True
         else:
             print(f"   ⚠️  [MEISSNER] [Al-Hakam] Adversarial review failed: {audit_response}")
@@ -258,8 +258,5 @@ class HybridOrchestrator:
             "total_audits": len(self.execution_history),
             "total_tokens": sum(r.tokens_used for r in self.execution_history),
             "modes_used": [r.execution_mode for r in self.execution_history],
-            "total_redacted_fields": sum(
-                len(r.redacted_fields) for r in self.execution_history
-            ),
+            "total_redacted_fields": sum(len(r.redacted_fields) for r in self.execution_history),
         }
-
