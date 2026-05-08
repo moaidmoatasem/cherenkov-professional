@@ -4,19 +4,20 @@ cherenkov - Simple Security Scanner
 Minimal viable product - Actually works!
 """
 
-import requests
 import argparse
-from urllib.parse import urlparse
 import json
 from datetime import datetime
+from urllib.parse import urlparse
+
+import requests
 
 
 class SimpleScanner:
     """Basic security scanner that actually works"""
-    
+
     def __init__(self, target_url: str):
         parsed = urlparse(target_url)
-        if parsed.scheme not in ('http', 'https'):
+        if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Unsupported scheme '{parsed.scheme}'. Only http/https are allowed.")
         if not parsed.netloc:
             raise ValueError("Invalid URL: missing hostname.")
@@ -62,7 +63,7 @@ class SimpleScanner:
 
     def scan_http_methods(self):
         """Check for dangerous HTTP methods"""
-        print(f"\n[*] Checking HTTP methods")
+        print("\n[*] Checking HTTP methods")
 
         dangerous_methods = ["PUT", "DELETE", "TRACE", "CONNECT"]
 
@@ -80,14 +81,16 @@ class SimpleScanner:
                     print(f"  [!] {method} is ALLOWED (Status: {response.status_code})")
                 else:
                     print(f"  [✓] {method} is blocked")
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                    requests.exceptions.SSLError) as e:
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                requests.exceptions.SSLError,
+            ):
                 print(f"  [✓] {method} is blocked or unreachable")
-    
+
     def scan_ssl_tls(self):
         """Check SSL/TLS configuration"""
-        print(f"\n[*] Checking SSL/TLS")
+        print("\n[*] Checking SSL/TLS")
 
         parsed = urlparse(self.target)
         if parsed.scheme != "https":
@@ -97,9 +100,9 @@ class SimpleScanner:
                 "description": "Site is not using HTTPS",
             }
             self.results["vulnerabilities"].append(vuln)
-            print(f"  [!] Site is using HTTP (insecure)")
+            print("  [!] Site is using HTTP (insecure)")
         else:
-            print(f"  [✓] Site is using HTTPS")
+            print("  [✓] Site is using HTTPS")
 
     def generate_report(self):
         """Generate scan report"""
@@ -146,4 +149,3 @@ if __name__ == "__main__":
 
     scanner = SimpleScanner(args.url)
     scanner.run()
-

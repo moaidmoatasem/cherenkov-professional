@@ -3,4 +3,3 @@
 from .header_scanner import SimpleScanner
 
 __all__ = ["SimpleScanner"]
-

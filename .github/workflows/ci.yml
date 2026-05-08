@@ -4,12 +4,23 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   test:
     runs-on: ubuntu-latest
 
@@ -24,19 +35,21 @@ jobs:
     - name: Install dependencies
       run: |
         pip install -r requirements.txt
-        pip install pytest pytest-cov black pylint
+        pip install -e ".[dev]"
+        pip install flake8
 
     - name: Run Black (code formatting)
       run: |
-        black --check src/ scripts/ || echo "Black formatting differences found (non-blocking)"
+        black --check src/ scripts/ || true
 
-    - name: Run Pylint
+    - name: Run Flake8
       run: |
-        pylint src/cherenkov --fail-under=7.5 || echo "Pylint score below 7.5 (non-blocking)"
+        flake8 src/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 src/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
 
-    - name: Run unit tests only
+    - name: Run unit tests
       run: |
-        pytest tests/unit/
+        pytest tests/unit/ -p no:cov
         echo "✅ Code quality checks completed"
 
     - name: Upload coverage to Codecov
@@ -46,9 +59,3 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: false
         verbose: true
-
-    - name: Summary
-      run: |
-        echo "✅ CI checks completed"
-        echo "Note: Integration tests require local Ollama/OpenAI setup"
-

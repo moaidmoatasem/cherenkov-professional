@@ -2,12 +2,12 @@
 Orchestration API - Public interface for running AI workflows
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
-import uuid
 import json
-from pathlib import Path
+import uuid
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Persistence for agents
 AGENT_REGISTRY_PATH = Path("workflow_results/agent_registry.json")
@@ -74,6 +74,7 @@ def orchestrate_workflow(config: Dict) -> WorkflowResult:
         WorkflowResult with execution details
     """
     import time
+    from cherenkov.result_persistence import ResultStore
 
     start = time.time()
 
@@ -81,15 +82,19 @@ def orchestrate_workflow(config: Dict) -> WorkflowResult:
         # TODO: Full implementation with real workflow execution
         # For now, basic validation
         if not config:
-            return WorkflowResult(
-                success=False, outputs={}, duration=0, errors=["Empty config"]
-            )
+            return WorkflowResult(success=False, outputs={}, duration=0, errors=["Empty config"])
 
         # Placeholder workflow execution
         outputs = {"status": "executed", "config": config}
 
+        duration = time.time() - start
+
+        # Save results directly via API layer
+        store = ResultStore()
+        store.save_result(config.get("name", "Unnamed"), outputs)
+
         return WorkflowResult(
-            success=True, outputs=outputs, duration=time.time() - start, errors=None
+            success=True, outputs=outputs, duration=duration, errors=None
         )
     except Exception as e:
         return WorkflowResult(
@@ -154,11 +159,7 @@ class WorkflowExecutor:
                     # Execute agent task
                     result = {
                         "task": task.get("name", "unknown"),
-                        "agent": (
-                            agent.config.role
-                            if hasattr(agent, "config")
-                            else str(agent)
-                        ),
+                        "agent": (agent.config.role if hasattr(agent, "config") else str(agent)),
                         "status": "completed",
                         "description": task.get("description", ""),
                     }
@@ -172,9 +173,7 @@ class WorkflowExecutor:
             "agents_deployed": len(self.agents),
             "tasks_executed": len(self.results),
             "workflow_name": self.config.get("name", "unknown"),
-            "execution_mode": self.config.get("execution", {}).get(
-                "mode", "sequential"
-            ),
+            "execution_mode": self.config.get("execution", {}).get("mode", "sequential"),
         }
 
     def generate_report(self) -> Dict[str, Any]:
@@ -222,7 +221,7 @@ def execute_parallel(agents: List[Any], tasks: List[Any]) -> List[Any]:
             )
 
     threads = []
-    for i, (agent, task) in enumerate(zip(agents, tasks)):
+    for i, (agent, task) in enumerate(zip(agents, tasks, strict=False)):
         thread = threading.Thread(target=worker, args=(agent, task, i))
         threads.append(thread)
         thread.start()
