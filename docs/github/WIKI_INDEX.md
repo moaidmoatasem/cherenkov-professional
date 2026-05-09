@@ -3,6 +3,7 @@
 Welcome to the CHERENKOV documentation wiki. This wiki serves as the primary resource for both human developers and AI agents operating within the repository.
 
 ## 1. Getting Started
+* [Project briefing (single entry)](docs/PROJECT_BRIEFING.md)
 * [Quick Start & Local Deployment](docs/README.md)
 * [The Trident of Truth Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
 * [CHERENKOV vs Traditional Scanners](#)
