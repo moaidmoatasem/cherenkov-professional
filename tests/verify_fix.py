@@ -69,7 +69,7 @@ class TestFix(unittest.TestCase):
                 print("Rejected 'wrong_token'")
 
     def test_failure_without_env_token(self):
-        from src.cherenkov.autonomous_generated.scanners.authenticationerror import (
+        from cherenkov.autonomous_generated.scanners.authenticationerror import (
             AuthenticationError,
             requires_authentication,
         )
@@ -94,7 +94,7 @@ class TestFix(unittest.TestCase):
                 print("Authentication denied (fail-closed) when CHERENKOV_AUTH_TOKEN is not set")
 
     def test_invalid_header_format(self):
-        from src.cherenkov.autonomous_generated.scanners.authenticationerror import (
+        from cherenkov.autonomous_generated.scanners.authenticationerror import (
             AuthenticationError,
             requires_authentication,
         )
@@ -104,7 +104,7 @@ class TestFix(unittest.TestCase):
             return "success"
 
         with patch(
-            "src.cherenkov.autonomous_generated.scanners.authenticationerror.request"
+            "cherenkov.autonomous_generated.scanners.authenticationerror.request"
         ) as mock_req:
             mock_req.headers.get.return_value = "Basic dXNlcjpwYXNz"  # Wrong type
             with self.assertRaises(AuthenticationError) as cm:
