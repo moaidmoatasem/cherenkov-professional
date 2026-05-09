@@ -1,7 +1,7 @@
 import pytest
 
 from cherenkov.core.hybrid_orchestrator import (
-    CognitiveLoopException,
+    CognitiveLoopError,
     ExecutionMode,
     HybridOrchestrator,
 )
@@ -19,8 +19,8 @@ def test_overseer_loop_detection():
     # Attempt 2
     orchestrator.execute_security_audit("web", context, scope, mode=ExecutionMode.LOCAL_ONLY)
 
-    # Attempt 3 - Should raise CognitiveLoopException
-    with pytest.raises(CognitiveLoopException):
+    # Attempt 3 - Should raise CognitiveLoopError
+    with pytest.raises(CognitiveLoopError):
         orchestrator.execute_security_audit("web", context, scope, mode=ExecutionMode.LOCAL_ONLY)
 
 

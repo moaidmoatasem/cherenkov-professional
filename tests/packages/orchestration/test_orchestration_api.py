@@ -2,7 +2,7 @@
 Tests for Orchestration API
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 from cherenkov.orchestration.orchestration_api import (
     AgentID,
@@ -55,33 +55,23 @@ def test_execute_parallel():
     assert all("success" in r for r in results)
 
 
-@patch("cherenkov.orchestration.result_persistence.ResultStore")
-def test_get_workflow_status(mock_result_store):
-    """Test get_workflow_status calls ResultStore.get_latest"""
-    # Configure mock
-    mock_store_instance = mock_result_store.return_value
-    mock_store_instance.get_latest.return_value = {"status": "completed", "result": "success"}
+@patch("cherenkov.orchestration.orchestration_api._scheduler")
+def test_get_workflow_status(mock_scheduler):
+    """Test get_workflow_status calls scheduler.get_status"""
+    mock_scheduler.get_status.return_value = {"status": "completed", "result": "success"}
 
-    # Call function
     result = get_workflow_status("test_workflow_123")
 
-    # Assert
-    mock_result_store.assert_called_once()
-    mock_store_instance.get_latest.assert_called_once_with("test_workflow_123")
+    mock_scheduler.get_status.assert_called_once_with("test_workflow_123")
     assert result == {"status": "completed", "result": "success"}
 
 
-@patch("cherenkov.orchestration.result_persistence.ResultStore")
-def test_get_workflow_status_not_found(mock_result_store):
+@patch("cherenkov.orchestration.orchestration_api._scheduler")
+def test_get_workflow_status_not_found(mock_scheduler):
     """Test get_workflow_status handles missing workflows"""
-    # Configure mock to return None
-    mock_store_instance = mock_result_store.return_value
-    mock_store_instance.get_latest.return_value = None
+    mock_scheduler.get_status.return_value = None
 
-    # Call function
     result = get_workflow_status("nonexistent_workflow")
 
-    # Assert
-    mock_result_store.assert_called_once()
-    mock_store_instance.get_latest.assert_called_once_with("nonexistent_workflow")
+    mock_scheduler.get_status.assert_called_once_with("nonexistent_workflow")
     assert result is None

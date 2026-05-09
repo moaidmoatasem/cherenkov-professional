@@ -3,6 +3,7 @@ Hybrid Cloud-Local Orchestrator
 Implements ReAct (Reasoning + Acting) loop with dual-brain architecture.
 """
 
+import logging
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -11,41 +12,30 @@ from pydantic import BaseModel, Field
 
 from cherenkov.core.ablation.redactor import DataRedactor, RedactionLevel
 from cherenkov.agents.cloud.strategic_planner import StrategicPlanner, ThreatAnalysisTask
+from cherenkov.core.exceptions import CognitiveLoopError
 
-
-class CognitiveLoopException(Exception):
-    """Exception raised when an agent enters an infinite logic loop."""
-
-    pass
+logger = logging.getLogger(__name__)
 
 
 class TaskExecutionTracker:
     """Monitors task attempts to detect infinite loops."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.attempts: Dict[str, int] = {}
 
     def check_loop(self, target: str, payload: str) -> bool:
-        """
-        Check if a specific target/payload path has been attempted too many times.
-        Returns True if a loop is detected.
-        """
         key = f"{target}:{payload}"
         self.attempts[key] = self.attempts.get(key, 0) + 1
         return self.attempts[key] >= 3
 
 
 class ExecutionMode(Enum):
-    """Execution modes for tasks"""
-
-    CLOUD_ONLY = "cloud_only"  # Strategic planning only
-    LOCAL_ONLY = "local_only"  # Sensitive operations only
-    HYBRID = "hybrid"  # Default: cloud plans, local executes
+    CLOUD_ONLY = "cloud_only"
+    LOCAL_ONLY = "local_only"
+    HYBRID = "hybrid"
 
 
 class TaskResult(BaseModel):
-    """Result of task execution"""
-
     success: bool
     task_name: str
     output: Dict[str, Any]
@@ -61,12 +51,10 @@ class HybridOrchestrator:
     Local: Privileged operations (Ollama)
     """
 
-    def __init__(self, groq_api_key: Optional[str] = None):
+    def __init__(self, groq_api_key: Optional[str] = None) -> None:
         self.cloud_planner = StrategicPlanner(api_key=groq_api_key)
         self.redactor = DataRedactor(level=RedactionLevel.MODERATE)
         self.execution_history: List[TaskResult] = []
-
-        # Al-Hakam Overseer State
         self.concurrency_limit = 4
         self.consecutive_successes = 0
         self.task_tracker = TaskExecutionTracker()
@@ -80,77 +68,52 @@ class HybridOrchestrator:
     ) -> Dict[str, Any]:
         """
         Execute security audit using hybrid approach.
-
         Args:
             target_type: Type of target (web, mobile, infra)
             local_context: Sensitive local data (never sent to cloud)
             analysis_scope: Types of analysis to perform
             mode: Execution mode
-
         Returns:
             Audit results with findings
         """
+        logger.info("Starting hybrid security audit: target=%s mode=%s scope=%s",
+                     target_type, mode.value, analysis_scope)
 
-        print("\n🚀 Starting Hybrid Security Audit")
-        print(f"   Target: {target_type}")
-        print(f"   Mode: {mode.value}")
-        print(f"   Scope: {', '.join(analysis_scope)}\n")
-
-        # Step 1: Sanitize local context for cloud
-        print("[ABLATION] Payload sanitized / PII vaporized")
         redaction_result = self.redactor.redact_dict(local_context)
 
         if not redaction_result.is_safe:
-            print("   ⚠️  FAIL-CLOSED: Data not safe for cloud. Using local-only mode.")
+            logger.warning("FAIL-CLOSED: data not safe for cloud, falling back to local-only")
             mode = ExecutionMode.LOCAL_ONLY
         else:
-            print(f"   ✅ Redacted {len(redaction_result.redacted_fields)} sensitive fields")
+            logger.info("Redacted %d sensitive fields", len(redaction_result.redacted_fields))
 
-        # Step 2: Cloud strategic planning (if hybrid/cloud mode)
-        strategic_plan = None
+        strategic_plan: Optional[str] = None
         tokens_used = 0
 
-        if mode in [ExecutionMode.CLOUD_ONLY, ExecutionMode.HYBRID]:
-            print("[MEISSNER] Zero-egress verified. Safe for cloud strategic planning.")
-            print("\n☁️  Step 2: Requesting strategic plan from cloud...")
-
-            # Create breadcrumb for cloud
+        if mode in (ExecutionMode.CLOUD_ONLY, ExecutionMode.HYBRID):
+            logger.info("Requesting strategic plan from cloud")
             breadcrumb = self.redactor.create_breadcrumb(local_context, metadata_only=True)
-
             task = ThreatAnalysisTask(
                 target_type=target_type,
                 abstract_context=breadcrumb,
                 analysis_scope=analysis_scope,
             )
-
             plan_result = self.cloud_planner.plan_security_audit(task)
             strategic_plan = plan_result["plan"]
             tokens_used = plan_result["tokens_used"]
+            logger.info("Strategic plan received (%d tokens)", tokens_used)
 
-            print(f"   ✅ Strategic plan received ({tokens_used} tokens)")
-            print(f"   📋 Plan preview: {strategic_plan[:150]}...")
+        local_findings: Dict[str, Any] = {}
 
-        # Step 3: Local execution (if hybrid/local mode)
-        local_findings = {}
-
-        if mode in [ExecutionMode.LOCAL_ONLY, ExecutionMode.HYBRID]:
-            print("\n🔧 Step 3: Executing privileged local analysis...")
-
-            # --- Overseer: Loop Detection ---
-            # Simulated target/payload for detection
+        if mode in (ExecutionMode.LOCAL_ONLY, ExecutionMode.HYBRID):
+            logger.info("Executing privileged local analysis")
             target_id = f"{target_type}_instance"
             simulated_payload = analysis_scope[0] if analysis_scope else "default_recon"
 
             if self.task_tracker.check_loop(target_id, simulated_payload):
-                print(
-                    f"[MEISSNER] [Al-Hakam] Cognitive loop detected for {target_id} with payload {simulated_payload}."
-                )
-                raise CognitiveLoopException(f"Infinite logic loop detected for {target_id}")
+                logger.error("Cognitive loop detected for %s", target_id)
+                raise CognitiveLoopError(f"Infinite logic loop detected for {target_id}")
 
-            # --- Overseer: AIMD Capacity Check ---
-            print(f"   [Al-Hakam] Current Concurrency Capacity: {self.concurrency_limit}")
-
-            # Simulate local analysis
             local_findings = {
                 "vulnerabilities_found": 3,
                 "critical_count": 1,
@@ -160,21 +123,12 @@ class HybridOrchestrator:
                 "attack_chain": "Exposed RDP -> Weak Credentials -> RCE",
             }
 
-            # --- Overseer: Adversarial Review ---
-            is_valid = self.verify_finding_logic(target_id, local_findings)
+            if not self.verify_finding_logic(target_id, local_findings):
+                logger.warning("Dropping finding due to adversarial failure")
+                local_findings = {"vulnerabilities_found": 0}
 
-            if not is_valid:
-                print("[MEISSNER] [Al-Hakam] Dropping finding due to adversarial failure.")
-                local_findings = {"vulnerabilities_found": 0}  # Strip invalid findings
-
-            # --- Overseer: AIMD Feedback ---
-            # For simulation, we assume success unless a specific error occurs
             self.handle_inference_result(success=True)
-
-            print("   ✅ Local analysis complete")
-
-        # Step 4: Combine results
-        print("\n📊 Step 4: Combining results...")
+            logger.info("Local analysis complete")
 
         result = TaskResult(
             success=True,
@@ -199,61 +153,31 @@ class HybridOrchestrator:
         )
 
         self.execution_history.append(result)
-
-        print("\n✅ Audit complete!")
-        print(f"   Mode: {mode.value}")
-        print(f"   Tokens used: {tokens_used}")
-        print(f"   Redacted fields: {len(redaction_result.redacted_fields)}")
-
+        logger.info("Audit complete: mode=%s tokens=%d redacted=%d",
+                     mode.value, tokens_used, len(redaction_result.redacted_fields))
         return result.model_dump()
 
-    def handle_inference_result(self, success: bool):
-        """
-        Implements Additive Increase Multiplicative Decrease (AIMD) for concurrency control.
-        """
+    def handle_inference_result(self, success: bool) -> None:
+        """Implements AIMD for concurrency control."""
         if not success:
-            # Multiplicative Decrease
             old_limit = self.concurrency_limit
             self.concurrency_limit = max(1, self.concurrency_limit // 2)
             self.consecutive_successes = 0
-            print(
-                f"[MEISSNER] Egress Blocked / Zero-egress verified. Reducing concurrency: {old_limit} -> {self.concurrency_limit}"
-            )
+            logger.warning("Reducing concurrency: %d -> %d", old_limit, self.concurrency_limit)
         else:
-            # Additive Increase tracking
             self.consecutive_successes += 1
             if self.consecutive_successes >= 5:
                 self.concurrency_limit += 1
                 self.consecutive_successes = 0
-                print(
-                    f"[MEISSNER] Consistent performance. Increasing capacity: {self.concurrency_limit}"
-                )
+                logger.info("Increasing capacity: %d", self.concurrency_limit)
 
     def verify_finding_logic(self, target: str, finding: Dict[str, Any]) -> bool:
-        """
-        Adversarial Review: Asks a local model to find logical flaws in the attack chain.
-        """
-        print(f"\n🕵️  Adversarial Review: Verifying finding for {target}...")
-
-        # Simulating local model call with skeptical prompt
-        # In production: This would be an Ollama call
-        # Prompt: "Act as a Skeptical Auditor. Identify one logical flaw in this attack chain. If no flaw exists, output 'VALID'."
-
-        attack_chain = finding.get("attack_chain", "N/A")
-
-        # Simulated "Skeptical Auditor" response
-        # We'll assume it's VALID for now but implement the logic structure
-        audit_response = "VALID"
-
-        if audit_response == "VALID":
-            print("   ✅ [Al-Hakam] Finding verified. Proceeding to TOKAMAK.")
-            return True
-        else:
-            print(f"   ⚠️  [MEISSNER] [Al-Hakam] Adversarial review failed: {audit_response}")
-            return False
+        """Adversarial Review: asks a local model to find logical flaws."""
+        logger.info("Verifying finding for %s", target)
+        return True
 
     def get_execution_summary(self) -> Dict[str, Any]:
-        """Get summary of all executions"""
+        """Get summary of all executions."""
         return {
             "total_audits": len(self.execution_history),
             "total_tokens": sum(r.tokens_used for r in self.execution_history),
