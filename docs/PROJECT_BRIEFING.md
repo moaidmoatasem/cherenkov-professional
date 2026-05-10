@@ -32,6 +32,7 @@ CHERENKOV is scoped as an air-gapped, sovereign security intelligence stack orga
 | **Governance / PM rules** | Branches, milestones, labels | [../AGENTS.md](../AGENTS.md) |
 | **Product / narrative SSOT** | Sovereign framing | [../CHERENKOV_SSOT.md](../CHERENKOV_SSOT.md), [../CHERENKOV_SOVEREIGN_BLUEPRINT.md](../CHERENKOV_SOVEREIGN_BLUEPRINT.md) |
 | **Risk exercise** | Prospective failure modes | [../CHERENKOV_PREMORTEM.md](../CHERENKOV_PREMORTEM.md) |
+| **Published site** | Reader-facing docs (may trail repo) | [docs.cherenkov-security.com](https://docs.cherenkov-security.com/) |
 
 ```mermaid
 flowchart LR
