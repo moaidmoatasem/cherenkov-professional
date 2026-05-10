@@ -289,7 +289,7 @@ class DelegationGuardrails:
 
         if not chain and source_agent_id:
             chain = [source_agent_id] + existing_chain if existing_chain else [source_agent_id]
-
+        if target_agent_id is None:
             candidates = self._capability_registry.find_agents_for_capability(capability_needed)
 
             available_candidates = []
