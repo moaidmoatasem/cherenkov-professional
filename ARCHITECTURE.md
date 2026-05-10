@@ -1,9 +1,8 @@
-# MITHAQ / CHERENKOV Architecture
+# CHERENKOV Architecture
 
-This document describes the architectural principles and design patterns of the MITHAQ / CHERENKOV project.
+This document describes the architectural principles and design patterns of the CHERENKOV project.
 
-## 1. The Trident of Truth
-MITHAQ operates on the "Trident of Truth" framework:
+CHERENKOV operates on the "Trident of Truth" framework:
 - **DAREE3:** Network enforcement and proxy layer. Controls external access.
 - **SIYAADA:** Data redaction and anonymization. Protects sensitive information.
 - **AL-BURHAN:** Sandboxed validation. Ensures untrusted code and scanners are executed safely.
@@ -15,7 +14,7 @@ The project strictly enforces a Clean Architecture pattern, isolating concerns a
 - **CLI/Client Layer:** Thin wrappers that interact only with the API layer.
 
 ## 3. Agent Governor and Cognitive Routing
-MITHAQ leverages an **Agent Governor** pattern to route tasks among various internal AI agents dynamically. Agents are assigned specific **roles** and **rules**, and their outputs are moderated by the governor to ensure safety, alignment, and execution of the given flow.
+CHERENKOV leverages an **Agent Governor** pattern to route tasks among various internal AI agents dynamically. Agents are assigned specific **roles** and **rules**, and their outputs are moderated by the governor to ensure safety, alignment, and execution of the given flow.
 
 ## 4. Scanners Plugin Architecture
 Scanners must inherit from the `BaseScanner` class (`src/cherenkov/core/base_scanner.py`).
