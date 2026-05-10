@@ -68,6 +68,7 @@ jobs:
       uses: github/codeql-action/init@v4
       with:
         languages: 'python'
+        build-mode: 'none'
 
 
     - name: Perform CodeQL Analysis
