@@ -323,7 +323,7 @@ class TokamakAgent:
 
     async def _do_http_probe(self, target: str, vuln_type: str, payload: str) -> dict[str, Any]:
         """Execute a single HTTP probe with timeout."""
-        async with httpx.AsyncClient(timeout=FAST_PROBE_TIMEOUT, verify=False) as client:  # noqa: S501 — localhost probes only
+        async with httpx.AsyncClient(timeout=FAST_PROBE_TIMEOUT, verify=False) as client:  # nosec B501 # noqa: S501 localhost probes only
             if vuln_type == "xss":
                 r = await client.get(target + httpx.utils.quote(payload), follow_redirects=False)
                 reflected = payload.lower() in r.text.lower()
