@@ -143,7 +143,7 @@ class SimpleScanner(BaseScanner):
 
     def scan_ssl_tls(self, findings_list: List[Finding]):
         """Check SSL/TLS configuration"""
-        print("\n[*] Checking SSL/TLS")
+        logger.info("Checking SSL/TLS")
 
         parsed = urlparse(self.target)
         if parsed.scheme != "https":
@@ -164,34 +164,34 @@ class SimpleScanner(BaseScanner):
                 )
             )
 
-            print("  [!] Site is using HTTP (insecure)")
+            logger.warning("Site is using HTTP (insecure)")
         else:
-            print("  [✓] Site is using HTTPS")
+            logger.info("Site is using HTTPS")
 
     def generate_report(self):
         """Generate scan report"""
-        print("\n" + "=" * 70)
-        print("SCAN REPORT")
-        print("=" * 70)
-        print(f"Target: {self.results['target']}")
-        print(f"Scan Time: {self.results['timestamp']}")
-        print(f"Vulnerabilities Found: {len(self.results['vulnerabilities'])}")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("SCAN REPORT")
+        logger.info("=" * 70)
+        logger.info("Target: %s", self.results['target'])
+        logger.info("Scan Time: %s", self.results['timestamp'])
+        logger.info("Vulnerabilities Found: %s", len(self.results['vulnerabilities']))
+        logger.info("=" * 70)
 
         if not self.results["vulnerabilities"]:
-            print("\n✅ No vulnerabilities detected!")
+            logger.info("No vulnerabilities detected!")
         else:
-            print("\n⚠️  VULNERABILITIES:")
+            logger.warning("VULNERABILITIES:")
             for i, vuln in enumerate(self.results["vulnerabilities"], 1):
-                print(f"\n{i}. {vuln['type']} [{vuln['severity']}]")
-                print(f"   {vuln.get('description', '')}")
+                logger.warning("%s. %s [%s]", i, vuln['type'], vuln['severity'])
+                logger.warning("   %s", vuln.get('description', ''))
 
         # Save to file
         report_file = f"scan_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(report_file, "w") as f:
             json.dump(self.results, f, indent=2)
 
-        print(f"\n📄 Full report saved to: {report_file}")
+        logger.info("Full report saved to: %s", report_file)
 
     async def scan(self, target: str, timeout: float = 10.0) -> ScanResult:
         """Implement BaseScanner async scan method"""
@@ -222,9 +222,9 @@ class SimpleScanner(BaseScanner):
 
     def run(self):
         """Run all scans"""
-        print("=" * 70)
-        print("🔍 cherenkov SECURITY SCANNER")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("cherenkov SECURITY SCANNER")
+        logger.info("=" * 70)
 
         findings = []
         self.scan_security_headers(findings)
