@@ -10,15 +10,14 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-sys.path.insert(0, "cherenkov/scanners/refined")
-
 logger = logging.getLogger(__name__)
 
-from csrf_scanner import scan_csrf
-from open_redirect_scanner import scan_open_redirect
-from xss_scanner import scan_xss
+sys.path.insert(0, "cherenkov/scanners/refined")  # noqa: E402
+from csrf_scanner import scan_csrf  # noqa: E402
+from open_redirect_scanner import scan_open_redirect  # noqa: E402
+from xss_scanner import scan_xss  # noqa: E402
 
-from ..header_scanner import SimpleScanner
+from ..header_scanner import SimpleScanner  # noqa: E402
 
 
 class UnifiedSecurityScanner:
@@ -80,12 +79,14 @@ class UnifiedSecurityScanner:
         logger.info("SCAN SUMMARY")
         logger.info("=" * 70)
         logger.info("Target: %s", self.target)
-        logger.info("Total Vulnerabilities: %s", self.results['total_vulnerabilities'])
+        logger.info("Total Vulnerabilities: %s", self.results["total_vulnerabilities"])
         logger.info("By Scanner:")
-        logger.info("  - Headers: %s", len(self.results['scans']['headers'].get('vulnerabilities', [])))
-        logger.info("  - XSS: %s", self.results['scans']['xss'].get('count', 0))
-        logger.info("  - CSRF: %s", self.results['scans']['csrf'].get('count', 0))
-        logger.info("  - Open Redirect: %s", self.results['scans']['open_redirect'].get('count', 0))
+        logger.info(
+            "  - Headers: %s", len(self.results["scans"]["headers"].get("vulnerabilities", []))
+        )
+        logger.info("  - XSS: %s", self.results["scans"]["xss"].get("count", 0))
+        logger.info("  - CSRF: %s", self.results["scans"]["csrf"].get("count", 0))
+        logger.info("  - Open Redirect: %s", self.results["scans"]["open_redirect"].get("count", 0))
 
     def save_report(self, filename: Optional[str] = None) -> None:
         """Save scan report"""

@@ -48,9 +48,11 @@ class SimpleScanner(BaseScanner):
             "vulnerabilities": [],
         }
 
-    def scan_security_headers(self, findings_list: List[Finding]):
+    def scan_security_headers(self, findings_list: Optional[List[Finding]] = None):
         """Check for missing security headers"""
         logger.info("Scanning security headers for %s", self.target)
+        if findings_list is None:
+            findings_list = []
 
         try:
             response = requests.get(self.target, timeout=10)
@@ -94,9 +96,11 @@ class SimpleScanner(BaseScanner):
         except Exception as e:
             logger.error("Error scanning headers: %s", e)
 
-    def scan_http_methods(self, findings_list: List[Finding]):
+    def scan_http_methods(self, findings_list: Optional[List[Finding]] = None):
         """Check for dangerous HTTP methods"""
         logger.info("Checking HTTP methods")
+        if findings_list is None:
+            findings_list = []
 
         dangerous_methods = ["PUT", "DELETE", "TRACE", "CONNECT"]
 
@@ -141,9 +145,11 @@ class SimpleScanner(BaseScanner):
                     else:
                         logger.info("%s is blocked", method)
 
-    def scan_ssl_tls(self, findings_list: List[Finding]):
+    def scan_ssl_tls(self, findings_list: Optional[List[Finding]] = None):
         """Check SSL/TLS configuration"""
         logger.info("Checking SSL/TLS")
+        if findings_list is None:
+            findings_list = []
 
         parsed = urlparse(self.target)
         if parsed.scheme != "https":
@@ -173,9 +179,9 @@ class SimpleScanner(BaseScanner):
         logger.info("=" * 70)
         logger.info("SCAN REPORT")
         logger.info("=" * 70)
-        logger.info("Target: %s", self.results['target'])
-        logger.info("Scan Time: %s", self.results['timestamp'])
-        logger.info("Vulnerabilities Found: %s", len(self.results['vulnerabilities']))
+        logger.info("Target: %s", self.results["target"])
+        logger.info("Scan Time: %s", self.results["timestamp"])
+        logger.info("Vulnerabilities Found: %s", len(self.results["vulnerabilities"]))
         logger.info("=" * 70)
 
         if not self.results["vulnerabilities"]:
@@ -183,8 +189,8 @@ class SimpleScanner(BaseScanner):
         else:
             logger.warning("VULNERABILITIES:")
             for i, vuln in enumerate(self.results["vulnerabilities"], 1):
-                logger.warning("%s. %s [%s]", i, vuln['type'], vuln['severity'])
-                logger.warning("   %s", vuln.get('description', ''))
+                logger.warning("%s. %s [%s]", i, vuln["type"], vuln["severity"])
+                logger.warning("   %s", vuln.get("description", ""))
 
         # Save to file
         report_file = f"scan_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
