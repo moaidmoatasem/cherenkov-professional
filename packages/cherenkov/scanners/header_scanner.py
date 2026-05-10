@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import concurrent.futures
 import json
+import logging
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
@@ -15,6 +16,8 @@ from urllib.parse import urlparse
 import requests
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleScanner(BaseScanner):
@@ -47,7 +50,7 @@ class SimpleScanner(BaseScanner):
 
     def scan_security_headers(self, findings_list: List[Finding]):
         """Check for missing security headers"""
-        print(f"\n[*] Scanning security headers for {self.target}")
+        logger.info("Scanning security headers for %s", self.target)
 
         try:
             response = requests.get(self.target, timeout=10)
@@ -84,16 +87,16 @@ class SimpleScanner(BaseScanner):
                         )
                     )
 
-                    print(f"  [!] MISSING: {header}")
+                    logger.warning("MISSING: %s", header)
                 else:
-                    print(f"  [✓] Found: {header}")
+                    logger.info("Found: %s", header)
 
         except Exception as e:
-            print(f"  [!] Error: {e}")
+            logger.error("Error scanning headers: %s", e)
 
     def scan_http_methods(self, findings_list: List[Finding]):
         """Check for dangerous HTTP methods"""
-        print("\n[*] Checking HTTP methods")
+        logger.info("Checking HTTP methods")
 
         dangerous_methods = ["PUT", "DELETE", "TRACE", "CONNECT"]
 
@@ -113,7 +116,7 @@ class SimpleScanner(BaseScanner):
 
             for method, response, error in results:
                 if error:
-                    print(f"  [✓] {method} is blocked or unreachable")
+                    logger.info("%s is blocked or unreachable", method)
                 else:
                     if response.status_code not in [405, 501]:
                         vuln = {
@@ -134,9 +137,9 @@ class SimpleScanner(BaseScanner):
                             )
                         )
 
-                        print(f"  [!] {method} is ALLOWED (Status: {response.status_code})")
+                        logger.warning("%s is ALLOWED (Status: %s)", method, response.status_code)
                     else:
-                        print(f"  [✓] {method} is blocked")
+                        logger.info("%s is blocked", method)
 
     def scan_ssl_tls(self, findings_list: List[Finding]):
         """Check SSL/TLS configuration"""
