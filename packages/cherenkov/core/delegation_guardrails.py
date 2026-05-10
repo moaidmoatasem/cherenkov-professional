@@ -99,8 +99,6 @@ class DelegationRecord:
 
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize to dictionary."""
         from dataclasses import asdict
 
         return asdict(self)
