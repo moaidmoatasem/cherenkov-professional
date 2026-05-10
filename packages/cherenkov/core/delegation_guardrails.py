@@ -99,6 +99,8 @@ class DelegationRecord:
 
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert record to dictionary for serialization."""
         from dataclasses import asdict
 
         return asdict(self)
@@ -214,6 +216,7 @@ class DelegationGuardrails:
         """
         chain = list(existing_chain) if existing_chain else []
 
+        if not self.policy.allow_delegation:
             logger.warning("Delegation denied: policy forbids all delegation")
             return DelegationResult.POLICY_DENIED
 
@@ -231,6 +234,9 @@ class DelegationGuardrails:
             )
             return DelegationResult.CIRCULAR_DELEGATION
 
+        if self.policy.require_capability_match:
+            target_reg = self._capability_registry.get_registration(target_agent_id)
+            if not target_reg:
                 logger.warning(f"Delegation denied: target agent {target_agent_id} not registered")
                 return DelegationResult.CAPABILITY_MISMATCH
 
