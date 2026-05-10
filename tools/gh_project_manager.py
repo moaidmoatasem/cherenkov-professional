@@ -10,7 +10,7 @@ def gh(args, capture=True):
     cmd = ["gh"] + args + ["--repo", REPO]
     try:
         r = subprocess.run(cmd, capture_output=capture, text=True, check=True)
-        return r.stdout.strip()
+        return r.stdout.strip() if capture and r.stdout else ""
     except subprocess.CalledProcessError as e:
         print(f"Error: {e.stderr}", file=sys.stderr); return None
 
