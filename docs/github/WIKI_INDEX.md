@@ -2,6 +2,8 @@
 
 Welcome to the CHERENKOV documentation wiki. This wiki serves as the primary resource for both human developers and AI agents operating within the repository.
 
+Reader-facing docs are also published at [https://docs.cherenkov-security.com/](https://docs.cherenkov-security.com/).
+
 ## 1. Getting Started
 * [Project briefing (single entry)](docs/PROJECT_BRIEFING.md)
 * [Quick Start & Local Deployment](docs/README.md)

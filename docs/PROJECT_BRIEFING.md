@@ -128,3 +128,9 @@ See the premortem for the full retrospective table and prescriptions.
 ## Maintenance
 
 Update this briefing when roadmap, milestone, or progress docs change materially—**at minimum** alongside a release tag or sprint close. Prefer a single small PR that adjusts links and debt bullets rather than expanding this file into duplicate long-form prose.
+
+---
+
+## Published documentation site
+
+Material aimed at external readers and deployments is also published at **[https://docs.cherenkov-security.com/](https://docs.cherenkov-security.com/)**. Use this repository’s `docs/` paths for **source-of-truth engineering** artifacts; use the site for **curated, reader-facing** docs when versions differ, prefer reconciling both in the same release pass.
