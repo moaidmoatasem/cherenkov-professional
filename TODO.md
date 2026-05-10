@@ -3,7 +3,10 @@
 ## Phase 0: Foundation — COMPLETE
 - [x] Repository setup
 - [x] Agent rules configuration
+- [x] CloudInstruction Pydantic schema
+- [x] AblationSanitizer with HMAC
 - [x] Package restructure (`packages/cherenkov/`)
+- [x] Test restructure (`tests/packages/`)
 - [x] Design System (tokens + Atomic Design)
 - [x] Error hierarchy (15 exception types)
 - [x] Logging (print→logging in all hand-written code)

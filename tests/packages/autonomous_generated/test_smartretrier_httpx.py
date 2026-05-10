@@ -10,7 +10,7 @@ pytestmark = pytest.mark.ai_generated
 mock_httpx = MagicMock()
 sys.modules["httpx"] = mock_httpx
 
-from cherenkov.autonomous_generated.misc.smartretrier import SmartRetrier
+from src.cherenkov.autonomous_generated.misc.smartretrier import SmartRetrier
 
 
 class TestSmartRetrier(unittest.IsolatedAsyncioTestCase):

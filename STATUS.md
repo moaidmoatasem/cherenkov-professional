@@ -3,12 +3,12 @@
 ## OPERATIONAL
 
 **Build:** 0.1.3 (STABLE)
-**Tests:** 25/25 orchestration + 26 core = 51 pass
+**Tests:** 25/25 orchestration + 26 core = 51 pass (1 pre-existing crewai dep failure)
 **Security:** Hardened
 **Coverage:** fail_under = 25%
 
 ### Core Systems
-- [x] Package restructure: `packages/cherenkov/` (logical subpackages)
+- [x] Package restructure: `packages/cherenkov/` (logical subpackages, single installable)
 - [x] Design System: Unified tokens, Atomic Design
 - [x] Error Hierarchy: 15 typed exception types in `core/exceptions.py`
 - [x] Logging: All hand-written modules use `logging.getLogger(__name__)`
@@ -16,9 +16,11 @@
 - [x] God-class splitting: AgentRegistry, WorkflowScheduler, WorkflowExecutor
 - [x] Type annotations: All hand-written modules annotated
 - [x] Autonomous Development Team (9 agents)
+- [x] Memory-Efficient Parallel Execution
 - [x] Security Scanner Suite (header_scanner, unified_scanner, etc.)
 - [x] CLI Interface (typer-based)
 - [x] Report Generation
+- [x] Batch Processing
 - [x] GitHub Project Management — Fully operational
 
 ### GitHub PM Infrastructure — LIVE
@@ -53,12 +55,16 @@ packages/cherenkov/
 └── autonomous_generated/ — AI-generated code
 ```
 
+### Scanners Available
+1. Security Headers, HTTP Methods, SSL/TLS, CORS, Cookies
+2. XSS, SQL Injection, CSRF, Path Traversal (AI-generated)
+
 ### Performance
 - RAM Usage: 4-6GB | Speed: 2-3x sequential | Reliability: 100% | Cost: $0
 
 ## Next Steps
+## Next Steps
 - [ ] Complete v1.0.0-rc1 issues (#18 Sanitization Bridge, #19 Trace Schema, #20 Trace Recorder)
 - [ ] Start v1.1.0 backlog (HTTP client, mobile scanners, CI pipeline)
-- [ ] Add Development discussion category (last manual step)
 
 **Status:** READY FOR DEVELOPMENT
