@@ -17,7 +17,7 @@ class OutputFormat(str, Enum):
     sarif = "sarif"
 
 
-def _get_registry():
+def _get_registry() -> "ScannerRegistry":
     # Lazy import — registry pulls pydantic which may not be installed in minimal envs.
     try:
         from cherenkov.core.registry import ScannerRegistry

@@ -84,7 +84,7 @@ class UnifiedSecurityScanner:
         print(f"  • CSRF: {self.results['scans']['csrf'].get('count', 0)}")
         print(f"  • Open Redirect: {self.results['scans']['open_redirect'].get('count', 0)}")
 
-    def save_report(self, filename=None):
+    def save_report(self, filename: Optional[str] = None) -> None:
         """Save scan report"""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

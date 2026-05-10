@@ -5,7 +5,7 @@
     "dockerfilePath": "deploy/Dockerfile"
   },
   "deploy": {
-    "startCommand": "python src/cherenkov_web.py",
+    "startCommand": "python cherenkov_web.py",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE"
   }
