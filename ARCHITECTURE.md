@@ -2,10 +2,11 @@
 
 This document describes the architectural principles and design patterns of the CHERENKOV project.
 
+## 1. The Trident of Truth
 CHERENKOV operates on the "Trident of Truth" framework:
-- **DAREE3:** Network enforcement and proxy layer. Controls external access.
-- **SIYAADA:** Data redaction and anonymization. Protects sensitive information.
-- **AL-BURHAN:** Sandboxed validation. Ensures untrusted code and scanners are executed safely.
+- **MEISSNER:** Network enforcement and proxy layer. Controls external access.
+- **ABLATION:** Data redaction and anonymization. Protects sensitive information.
+- **TOKAMAK:** Sandboxed validation. Ensures untrusted code and scanners are executed safely.
 
 ## 2. Clean Architecture
 The project strictly enforces a Clean Architecture pattern, isolating concerns across layers:
