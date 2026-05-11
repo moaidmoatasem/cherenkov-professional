@@ -18,6 +18,9 @@ WORKDIR /sandbox
 COPY ./packages /sandbox/packages
 COPY ./tests /sandbox/tests
 
+# Install pytest
+RUN pip install pytest pytest-asyncio
+
 # Drop privileges immediately
 USER tokamak_user
 

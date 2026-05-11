@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
+
 
 class CherenkovTrace(BaseModel):
     trace_id: str = Field(..., description="Unique identifier for the trace")
