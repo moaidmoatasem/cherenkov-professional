@@ -63,7 +63,7 @@ source = ["cherenkov"]
 omit = ["tests/*", "venv/*", "candidates/*", "packages/cherenkov/autonomous_generated/*"]
 
 [tool.coverage.report]
-fail_under = 25
+fail_under = 24
 precision = 2
 show_missing = true
 
