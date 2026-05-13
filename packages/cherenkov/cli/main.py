@@ -64,14 +64,16 @@ def scan(
     findings: list[dict] = []
     for scanner_name, result in scan_results.items():
         for f in result.findings:
-            findings.append({
-                "scanner": scanner_name,
-                "title": f.title,
-                "severity": f.severity.value,
-                "cwe": f.cwe,
-                "description": f.description,
-                "remediation": f.remediation,
-            })
+            findings.append(
+                {
+                    "scanner": scanner_name,
+                    "title": f.title,
+                    "severity": f.severity.value,
+                    "cwe": f.cwe,
+                    "description": f.description,
+                    "remediation": f.remediation,
+                }
+            )
 
     finished = datetime.now(timezone.utc).isoformat()
     save_scan(
@@ -108,7 +110,9 @@ def scan(
     else:
         t = Table("Finding", "Severity", "CWE", "Scanner", title=f"Cherenkov Trace — {target}")
         for f in findings:
-            t.add_row(f.get("title", ""), f.get("severity", ""), f.get("cwe", ""), f.get("scanner", ""))
+            t.add_row(
+                f.get("title", ""), f.get("severity", ""), f.get("cwe", ""), f.get("scanner", "")
+            )
         console.print(t if findings else "[green]No anomalies isolated.[/green]")
 
     console.print(f"[dim]scan_id: {scan_id}[/dim]")

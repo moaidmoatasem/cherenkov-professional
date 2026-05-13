@@ -53,6 +53,7 @@ if _STATIC_DIR.exists():
 
 # ── Models ──────────────────────────────────────────────────────────────────
 
+
 class ScanRequest(BaseModel):
     url: str
 
@@ -71,6 +72,7 @@ class WorkflowResponse(BaseModel):
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
+
 @app.get("/", include_in_schema=False)
 async def dashboard() -> FileResponse:
     """Serve the CHERENKOV web dashboard (replaces retired Flask app)."""
@@ -81,6 +83,7 @@ async def dashboard() -> FileResponse:
 
 
 # ── Scan API (replaces cherenkov_web.py Flask /api/scan) ────────────────────
+
 
 @app.post("/api/scan")
 async def scan_target(request: ScanRequest) -> dict:
@@ -115,15 +118,17 @@ async def scan_target(request: ScanRequest) -> dict:
     vulnerabilities: list[dict] = []
     for scanner_name, result in scan_results.items():
         for f in result.findings:
-            vulnerabilities.append({
-                "scanner": scanner_name,
-                "title": f.title,
-                "type": f.title,          # dashboard compatibility
-                "severity": f.severity.value,
-                "cwe": f.cwe,
-                "description": f.description,
-                "remediation": f.remediation,
-            })
+            vulnerabilities.append(
+                {
+                    "scanner": scanner_name,
+                    "title": f.title,
+                    "type": f.title,  # dashboard compatibility
+                    "severity": f.severity.value,
+                    "cwe": f.cwe,
+                    "description": f.description,
+                    "remediation": f.remediation,
+                }
+            )
 
     finished = datetime.now(timezone.utc).isoformat()
 
@@ -151,10 +156,6 @@ async def scan_target(request: ScanRequest) -> dict:
 
 
 # ── Health ───────────────────────────────────────────────────────────────────
-
-@app.get("/health")
-async def health() -> dict:
-    return {"status": "healthy", "agents": "operational"}
 
 
 @app.get("/health")

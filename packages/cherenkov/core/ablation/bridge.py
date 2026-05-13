@@ -93,7 +93,9 @@ _PATTERNS: list[tuple[str, re.Pattern, str]] = [
     # and other innocuous alphanumeric sequences, causing ~68% false-drop rate.
     (
         "aws_sec",
-        re.compile(r"(?i)(aws_secret_access_key|aws_secret|secret_access_key)\s*[:=]\s*[0-9a-zA-Z/+]{40}"),
+        re.compile(
+            r"(?i)(aws_secret_access_key|aws_secret|secret_access_key)\s*[:=]\s*[0-9a-zA-Z/+]{40}"
+        ),
         "[AWS_SECRET_REDACTED]",
     ),
     (

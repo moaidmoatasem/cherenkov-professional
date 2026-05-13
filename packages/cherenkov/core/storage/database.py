@@ -54,9 +54,7 @@ def save_scan(
     # Raise StorageError if a record with this scan_id already exists.
     now = datetime.now(timezone.utc).isoformat()
     with _connect(path) as conn:
-        existing = conn.execute(
-            "SELECT 1 FROM scans WHERE scan_id = ?", (scan_id,)
-        ).fetchone()
+        existing = conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
         if existing is not None:
             logger.error(
                 "WORM violation: attempted overwrite of immutable scan record scan_id=%s", scan_id
