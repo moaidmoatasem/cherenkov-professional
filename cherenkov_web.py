@@ -152,48 +152,59 @@ if __name__ == "__main__":
     </div>
     
     <script>
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         async function runScan() {
             const url = document.getElementById('url').value;
             if (!url) {
                 alert('Please enter a URL');
                 return;
             }
-            
+
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').innerHTML = '⏳ Scanning...';
-            
+
             try {
                 const response = await fetch('/api/scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
                 });
-                
+
                 const data = await response.json();
                 displayResults(data);
             } catch (error) {
-                document.getElementById('results').innerHTML = 
-                    '<p style="color: #ff4444;">Error: ' + error + '</p>';
+                document.getElementById('results').innerHTML =
+                    '<p style="color: #ff4444;">Error: ' + escapeHtml(String(error)) + '</p>';
             }
-            
+
             document.getElementById('loading').style.display = 'none';
         }
-        
+
         function displayResults(data) {
-            let html = '<h3>Scan Results for ' + data.target + '</h3>';
-            html += '<p>Vulnerabilities found: ' + data.count + '</p>';
-            
-            if (data.vulnerabilities.length > 0) {
+            let html = '<h3>Scan Results for ' + escapeHtml(data.target) + '</h3>';
+            html += '<p>Vulnerabilities found: ' + escapeHtml(data.count) + '</p>';
+
+            if (data.vulnerabilities && data.vulnerabilities.length > 0) {
                 data.vulnerabilities.forEach(v => {
-                    html += '<div class="vuln ' + v.severity.toLowerCase() + '">';
-                    html += '<strong>' + v.type + '</strong> [' + v.severity + ']<br>';
-                    html += v.description;
+                    const severityCls = escapeHtml(v.severity ? v.severity.toLowerCase() : '');
+                    html += '<div class="vuln ' + severityCls + '">';
+                    html += '<strong>' + escapeHtml(v.type) + '</strong> [' + escapeHtml(v.severity) + ']<br>';
+                    html += escapeHtml(v.description);
                     html += '</div>';
                 });
             } else {
                 html += '<p style="color: #00ff88;">✅ No vulnerabilities detected!</p>';
             }
-            
+
             document.getElementById('results').innerHTML = html;
         }
     </script>
