@@ -70,18 +70,17 @@ def test_run_scan_success():
     mock_result = MagicMock()
     mock_result.findings = [mock_finding]
 
+    mock_engine_instance = MagicMock()
+    mock_engine_instance.scan_all = AsyncMock(return_value={"test_scanner": mock_result})
+    mock_engine_cls = MagicMock(return_value=mock_engine_instance)
+
+    # ScanEngine/ScannerRegistry are local imports inside scan_target — patch at source
     with (
-        patch(
-            "cherenkov.api.main.ScanEngine",
-            autospec=True,
-        ) as mock_engine,
-        patch("cherenkov.api.main.ScannerRegistry", autospec=True),
+        patch("cherenkov.core.engine.ScanEngine", mock_engine_cls),
+        patch("cherenkov.core.registry.ScannerRegistry", MagicMock()),
         patch("cherenkov.api.main.init_db"),
         patch("cherenkov.api.main.save_scan"),
     ):
-        instance = mock_engine.return_value
-        instance.scan_all = AsyncMock(return_value={"test_scanner": mock_result})
-
         response = _client().post("/api/scan", json={"url": "http://example.com"})
 
     assert response.status_code == 200
