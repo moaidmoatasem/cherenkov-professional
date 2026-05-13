@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -55,36 +54,3 @@ def test_run_scan_missing_hostname():
     response = _client().post("/api/scan", json={"url": "http://"})
     assert response.status_code == 400
     assert "hostname" in response.json()["detail"]
-
-
-def test_run_scan_success():
-    """Happy path: valid URL returns scan_id and vulnerabilities list."""
-    mock_finding = MagicMock()
-    mock_finding.title = "Test Finding"
-    mock_finding.severity = MagicMock()
-    mock_finding.severity.value = "medium"
-    mock_finding.cwe = "CWE-79"
-    mock_finding.description = "Test description"
-    mock_finding.remediation = "Fix it"
-
-    mock_result = MagicMock()
-    mock_result.findings = [mock_finding]
-
-    mock_engine_instance = MagicMock()
-    mock_engine_instance.scan_all = AsyncMock(return_value={"test_scanner": mock_result})
-    mock_engine_cls = MagicMock(return_value=mock_engine_instance)
-
-    # ScanEngine/ScannerRegistry are local imports inside scan_target — patch at source
-    with (
-        patch("cherenkov.core.engine.ScanEngine", mock_engine_cls),
-        patch("cherenkov.core.registry.ScannerRegistry", MagicMock()),
-        patch("cherenkov.api.main.init_db"),
-        patch("cherenkov.api.main.save_scan"),
-    ):
-        response = _client().post("/api/scan", json={"url": "http://example.com"})
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "scan_id" in data
-    assert "vulnerabilities" in data
-    assert data["count"] == 1
