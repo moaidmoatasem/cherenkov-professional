@@ -17,8 +17,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code (fix: remove non-existent cherenkov/ directory)
-COPY src/ ./src/
+    # Copy application code
+    COPY packages/ ./packages/
 COPY scripts/ ./scripts/ 
 COPY examples/ ./examples/
 
