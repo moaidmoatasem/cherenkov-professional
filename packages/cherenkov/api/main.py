@@ -4,14 +4,16 @@ FastAPI-based API for remote workflow execution
 """
 
 import os
+import re
 import sys
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-sys.path.insert(0, "../..")
+# sys.path manipulation removed — package is installed via pyproject.toml
 
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
@@ -76,8 +78,14 @@ async def execute_workflow(request: WorkflowExecuteRequest) -> WorkflowResponse:
         if request.config:
             config = request.config
         else:
-            # Load from examples
-            workflow_path = f"examples/workflows/{request.workflow_name}.yaml"
+            # Sanitize workflow_name before path construction (prevent path traversal)
+            safe_name = Path(request.workflow_name).name
+            if not re.fullmatch(r"[a-zA-Z0-9_-]+", safe_name):
+                raise HTTPException(
+                    status_code=400,
+                    detail="workflow_name must contain only letters, digits, hyphens, or underscores",
+                )
+            workflow_path = str(Path("examples/workflows") / f"{safe_name}.yaml")
             config = load_workflow(workflow_path)
 
         # Execute
