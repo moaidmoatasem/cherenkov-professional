@@ -44,12 +44,12 @@ The system architecture is hardcoded to enforce three physical constraints, know
 
 CHERENKOV uses an **Agent Governor** pattern to route tasks dynamically, decouple strategy from execution, and prevent context poisoning.
 
-| Node Identity | Legacy Name | Engine | Role | Data Access |
-| :--- | :--- | :--- | :--- | :--- |
-| **TENSOR** (Strategist) | Al-Muhandis | Groq Llama 3.1 8B (Cloud) | Generates attack chains and plans. Breaks down compliance frameworks. | **Restricted:** Receives only sanitized breadcrumbs via ABLATION. |
-| **KINETIC** (Executor) | Al-Munafeedh | Ollama Llama 3.2 3B (Local) | Tactical execution of exploits using TENSOR's plans. | **Full Raw Access:** Operates behind MEISSNER air-gap. |
-| **AEGIS** (Arbiter) | Al-Hakam | Local Llama 3.1 8B (Local) | Arbiter and AIMD Circuit Breaker. Halts hallucination loops (e.g., KINETIC failing 3 times). | **Sanitized Context:** Reviews logic flows. |
-| **LATTICE** (Memory) | Al-Hafiz | Qdrant Vector DB | Long-term tactical memory, RAG, CVE knowledge base. | **Isolated:** Stores mathematical vectors of historical traces. |
+| Node Identity | Engine | Role | Data Access |
+| :--- | :--- | :--- | :--- |
+| **TENSOR** (Strategist) | Groq Llama 3.1 8B (Cloud) | Generates attack chains and plans. Breaks down compliance frameworks. | **Restricted:** Receives only sanitized breadcrumbs via ABLATION. |
+| **KINETIC** (Executor) | Ollama Llama 3.2 3B (Local) | Tactical execution of exploits using TENSOR's plans. | **Full Raw Access:** Operates behind MEISSNER air-gap. |
+| **AEGIS** (Arbiter) | Local Llama 3.1 8B (Local) | Arbiter and AIMD Circuit Breaker. Halts hallucination loops (e.g., KINETIC failing 3 times). | **Sanitized Context:** Reviews logic flows. |
+| **LATTICE** (Memory) | Qdrant Vector DB | Long-term tactical memory, RAG, CVE knowledge base. | **Isolated:** Stores mathematical vectors of historical traces. |
 
 ---
 
