@@ -136,6 +136,7 @@ class SimpleScanner:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(description="cherenkov - Simple Security Scanner")
     parser.add_argument("url", help="Target URL to scan (e.g., https://example.com)")
 

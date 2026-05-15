@@ -47,7 +47,7 @@ jobs:
 
     - name: Run Mypy (type check)
       run: |
-        mypy packages/ || true
+        mypy packages/ --ignore-missing-imports
 
     - name: Run tests
       run: |

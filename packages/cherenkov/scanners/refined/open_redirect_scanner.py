@@ -125,6 +125,7 @@ def scan_open_redirect(url: str) -> Dict:
 if __name__ == "__main__":
     import sys
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     if len(sys.argv) > 1:
         result = scan_open_redirect(sys.argv[1])
         logger.info("\n✅ Scan complete. Found %d open redirect vulnerabilities", result['count'])

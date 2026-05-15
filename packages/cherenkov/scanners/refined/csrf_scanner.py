@@ -125,6 +125,7 @@ def scan_csrf(url: str) -> Dict:
 if __name__ == "__main__":
     import sys
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     if len(sys.argv) > 1:
         result = scan_csrf(sys.argv[1])
         logger.info("\n✅ Scan complete. Found %d CSRF vulnerabilities", result['count'])

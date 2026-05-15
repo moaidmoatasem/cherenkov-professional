@@ -45,6 +45,7 @@ def csrf_scanner_plus(target_url):
     return csrf_vulnerable
 
 
-# Example usage
-result = csrf_scanner_plus("https://example.com")
-logger.info(result)
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    result = csrf_scanner_plus("https://example.com")
+    logger.info(result)

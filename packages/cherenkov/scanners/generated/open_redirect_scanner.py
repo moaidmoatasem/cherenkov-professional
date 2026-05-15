@@ -53,11 +53,10 @@ def xml_XXE_tester(xml_string):
         return False
 
 
-# Example XML string
-example_xml = (
-    """<root> <?xml version="1.0" encoding="UTF-8"?><test>This should be safe</test></root>"""
-)
-
-# Run the test and print result
-result = xml_XXE_tester(example_xml)
-logger.info("XML is secure: %s", "safe" if result else "vulnerable")
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    example_xml = (
+        """<root> <?xml version="1.0" encoding="UTF-8"?><test>This should be safe</test></root>"""
+    )
+    result = xml_XXE_tester(example_xml)
+    logger.info("XML is secure: %s", "safe" if result else "vulnerable")
