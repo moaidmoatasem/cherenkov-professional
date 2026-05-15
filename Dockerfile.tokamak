@@ -23,7 +23,7 @@ COPY system_dashboard.py /sandbox/system_dashboard.py
 
 # Install dependencies via pyproject.toml (requirements.txt removed — pyproject.toml is canonical)
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir pytest pytest-asyncio pytest-cov httpx python-dotenv pydantic requests cryptography crewai pyyaml typer
+RUN pip install --no-cache-dir pytest pytest-asyncio pytest-cov httpx python-dotenv pydantic requests cryptography crewai pyyaml typer groq
 ENV PYTHONPATH=/sandbox/packages:/sandbox
 
 # Drop privileges immediately
