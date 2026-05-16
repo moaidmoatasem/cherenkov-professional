@@ -136,14 +136,17 @@ async def v1_ablation_stats() -> dict:
 async def v1_scan(request: "ScanRequest") -> dict:
     """Proxy to the core scan engine; broadcasts a live event on completion."""
     result = await _run_scan(request)
-    await _broadcast({
-        "type": "scan_complete",
-        "scan_id": result["scan_id"],
-        "target": result["target"],
-        "count": result["count"],
-        "timestamp": result["timestamp"],
-    })
+    await _broadcast(
+        {
+            "type": "scan_complete",
+            "scan_id": result["scan_id"],
+            "target": result["target"],
+            "count": result["count"],
+            "timestamp": result["timestamp"],
+        }
+    )
     return result
+
 
 # Serve the static dashboard assets
 if _STATIC_DIR.exists():
