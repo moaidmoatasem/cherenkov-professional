@@ -1,34 +1,59 @@
-"""Base Mobile Scanner"""
+"""MobileScanner — Abstract base for mobile (APK/IPA) scanners."""
 
+from __future__ import annotations
+
+import shutil
+import tempfile
 from abc import abstractmethod
-from typing import List
+from pathlib import Path
+from typing import Optional
 
-from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult
+import httpx
+
+from cherenkov.core.base_scanner import BaseScanner, ScanResult
 
 
 class MobileScanner(BaseScanner):
-    """Abstract base class for Mobile Scanners (Android/iOS)"""
+    """Abstract base for mobile application scanners.
 
-    def __init__(self, name: str, description: str):
+    Provides helpers for APK validation, temporary workspace management,
+    and running external tools (apktool, androguard) via subprocess.
+    """
+
+    def __init__(self, name: str = "", description: str = ""):
         super().__init__(name, description)
+        self._workspace: Optional[tempfile.TemporaryDirectory] = None
 
     @abstractmethod
-    async def scan_file(self, file_path: str) -> List[Finding]:
-        """Scan a mobile binary (APK/IPA)"""
+    async def scan(self, target: str, timeout: float = 10.0) -> ScanResult:
         pass
 
-    async def scan(self, target: str, timeout: float = 30.0) -> ScanResult:
-        """Standard scan implementation for mobile"""
-        import time
+    async def _download_apk(self, url: str, timeout: float = 30.0) -> bytes:
+        async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
+            resp = await client.get(url, follow_redirects=True)
+            resp.raise_for_status()
+            return resp.content
 
-        start = time.monotonic()
-        # In a real scenario, we might download the file first if target is a URL
-        # For now, we assume target is a path or we simulate the analysis
-        findings = await self.scan_file(target)
+    def _validate_apk(self, filepath: str) -> bool:
+        path = Path(filepath)
+        if not path.is_file():
+            return False
+        if path.stat().st_size == 0:
+            return False
+        magic = path.read_bytes()[:4]
+        return magic == b"PK\x03\x04"
 
-        return ScanResult(
-            target=target,
-            scanner_name=self.name,
-            findings=findings,
-            duration_ms=(time.monotonic() - start) * 1000,
-        )
+    def _create_workspace(self) -> Path:
+        self._workspace = tempfile.TemporaryDirectory(prefix="cherenkov_mobile_")
+        return Path(self._workspace.name)
+
+    def _cleanup_workspace(self) -> None:
+        if self._workspace is not None:
+            try:
+                self._workspace.cleanup()
+            except Exception:
+                pass
+            self._workspace = None
+
+    def _check_tool(self, tool: str) -> bool:
+        return shutil.which(tool) is not None
