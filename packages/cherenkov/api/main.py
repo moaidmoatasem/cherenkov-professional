@@ -196,8 +196,10 @@ async def v1_ablation_stats() -> dict:
 
 
 @v1.post("/sandbox/execute")
-async def v1_sandbox_execute(request: SandboxExecuteRequest) -> dict:
-    """Execute a payload in the Tokamak sandbox."""
+async def v1_sandbox_execute(
+    request: SandboxExecuteRequest, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
+) -> dict:
+    """Execute a payload in the Tokamak sandbox. Requires OPERATOR role."""
     import asyncio
 
     from cherenkov.core.tokamak import Command, Tokamak
@@ -213,6 +215,7 @@ async def v1_sandbox_execute(request: SandboxExecuteRequest) -> dict:
         "trace_hash": result.trace_hash,
         "shred_receipt": result.shred_receipt,
         "exit_code": result.exit_code,
+        "duration_ms": result.duration_ms,
     }
 
 
