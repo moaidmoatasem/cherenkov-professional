@@ -11,12 +11,13 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
@@ -27,6 +28,7 @@ from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from cherenkov.core.storage.database import _DB_PATH
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
 from cherenkov.orchestration.workflow_parser import load_workflow
@@ -104,6 +106,12 @@ async def ws_live(websocket: WebSocket) -> None:
 
 # ── /api/v1 router (consumed by the React frontend) ─────────────────────────
 
+
+class SandboxExecuteRequest(BaseModel):
+    payload: str
+    timeout: int = 30
+
+
 v1 = APIRouter(prefix="/api/v1")
 
 
@@ -116,6 +124,14 @@ async def _check_ollama() -> str:
         return "offline"
 
 
+def _get_active_scans_count() -> int:
+    try:
+        with sqlite3.connect(_DB_PATH) as conn:
+            return conn.execute("SELECT count(*) FROM scans WHERE status = 'running'").fetchone()[0]
+    except Exception:
+        return 0
+
+
 @v1.get("/health")
 async def v1_health() -> dict:
     """Health check used by useMetrics / useQueueDepth hooks.
@@ -124,10 +140,8 @@ async def v1_health() -> dict:
     the Meissner shield state expected by ForensicHeader.
     """
     from cherenkov.core.circuit_breaker import meissner_hub
-    from cherenkov.core.storage.database import list_scans
 
-    recent_scans = list_scans(limit=5)
-    active_scans = sum(1 for s in recent_scans if s.get("status") == "running")
+    active_scans = _get_active_scans_count()
 
     ollama_status = await _check_ollama()
     meissner_state = meissner_hub.state.value.upper()
@@ -141,8 +155,8 @@ async def v1_health() -> dict:
         "meissner": {"state": meissner_state},
         "nodes": {
             "tensor": {"status": ollama_status, "model": "Llama 3.1 8B"},
-            "kinetic": {"status": "ready", "model": "Qwen2.5 3B", "ram_gb": 8},
-            "aegis": {"status": "ready", "model": "Llama 3.1 8B", "ram_gb": 8},
+            "kinetic": {"status": ollama_status, "model": "Qwen2.5 3B", "ram_gb": 8},
+            "aegis": {"status": ollama_status, "model": "Llama 3.1 8B", "ram_gb": 8},
             "lattice": {"status": "ready", "model": "Qdrant / Vector", "vector_count": 0},
             "tokamak": {"status": "ready", "model": "Sandbox Ready", "active_containers": 0},
         },
@@ -178,6 +192,33 @@ async def v1_ablation_stats() -> dict:
             "alert_active": False,
         }
     }
+
+
+@v1.post("/sandbox/execute")
+async def v1_sandbox_execute(request: SandboxExecuteRequest) -> dict:
+    """Execute a payload in the Tokamak sandbox."""
+    import asyncio
+
+    from cherenkov.core.tokamak import Command, Tokamak
+
+    cmd = Command(payload=request.payload, timeout=request.timeout)
+
+    # Run synchronously in an executor to avoid blocking the loop
+    result = await asyncio.to_thread(Tokamak.execute, cmd)
+
+    return {
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "trace_hash": result.trace_hash,
+        "shred_receipt": result.shred_receipt,
+        "exit_code": result.exit_code,
+    }
+
+
+@v1.get("/sandbox/status")
+async def v1_sandbox_status() -> dict:
+    """Return the status of the Tokamak sandbox."""
+    return {"status": "ready"}
 
 
 @v1.post("/scan")
@@ -263,6 +304,46 @@ async def v1_scan_report_sarif(scan_id: str) -> dict:
     }
 
 
+@v1.get("/findings/pending")
+async def v1_get_pending_findings() -> list[dict]:
+    """Return a list of all pending findings."""
+    from cherenkov.core.storage.database import get_pending_findings, init_db
+
+    try:
+        init_db()
+        return get_pending_findings()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get pending findings: {exc}"
+        ) from exc
+
+
+@v1.post("/findings/{finding_id}/approve")
+async def v1_approve_finding(finding_id: str, operator_id: Optional[str] = None) -> dict:
+    """Approve a finding."""
+    from cherenkov.core.storage.database import init_db, update_finding_status
+
+    try:
+        init_db()
+        update_finding_status(finding_id, "approved", operator_id)
+        return {"status": "success", "finding_id": finding_id, "new_status": "approved"}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to approve finding: {exc}") from exc
+
+
+@v1.post("/findings/{finding_id}/reject")
+async def v1_reject_finding(finding_id: str, operator_id: Optional[str] = None) -> dict:
+    """Reject a finding."""
+    from cherenkov.core.storage.database import init_db, update_finding_status
+
+    try:
+        init_db()
+        update_finding_status(finding_id, "rejected", operator_id)
+        return {"status": "success", "finding_id": finding_id, "new_status": "rejected"}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to reject finding: {exc}") from exc
+
+
 # Serve the static dashboard assets
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -273,6 +354,16 @@ if _STATIC_DIR.exists():
 
 class ScanRequest(BaseModel):
     url: str
+
+
+class FindingApproval(BaseModel):
+    finding_id: str
+    severity: str
+    scanner: str
+    title: str
+    status: Literal["pending", "approved", "rejected"]
+    operator_id: Optional[str] = None
+    approved_at: Optional[str] = None
 
 
 class WorkflowExecuteRequest(BaseModel):
@@ -356,6 +447,32 @@ async def _run_scan(request: "ScanRequest") -> dict:
             started_at=started,
             finished_at=finished,
         )
+
+        from cherenkov.core.storage.database import save_pending_finding
+
+        for v in vulnerabilities:
+            if v["severity"] in ("CRITICAL", "HIGH"):
+                finding_id = str(uuid.uuid4())
+                save_pending_finding(
+                    finding_id=finding_id,
+                    severity=v["severity"],
+                    scanner=v["scanner"],
+                    title=v["title"],
+                    scan_id=scan_id,
+                )
+
+                # We need to await the broadcast event, but broadcast relies on asyncio loop running.
+                # Since _run_scan is async, we can await it directly.
+                asyncio.create_task(
+                    _broadcast(
+                        {
+                            "type": "finding_discovered",
+                            "finding_id": finding_id,
+                            "severity": v["severity"],
+                        }
+                    )
+                )
+
     except Exception as exc:
         logger.error("Failed to persist scan %s: %s", scan_id, exc)
 
