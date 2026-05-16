@@ -3,8 +3,8 @@ Open Redirect Scanner - New Implementation
 Detects open redirect vulnerabilities
 """
 
-from typing import Dict, List
 import logging
+from typing import Dict, List
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import requests
