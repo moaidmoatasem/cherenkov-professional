@@ -4,67 +4,40 @@ import { CyberButton } from '../atoms';
 import { MessageSquare, X, Send, Bot, User, Loader2 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
-const AI_ENDPOINT = 'https://ais-dev-wnzpmrbfgr356tzt6nhup2-59657545691.europe-west2.run.app';
+// API key is read from the environment — set VITE_GEMINI_API_KEY in .env
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+const MODEL = 'gemini-2.0-flash';
+
+const SYSTEM_PROMPT = `You are the CHERENKOV AI Security Assistant — a sovereign, zero-egress AI agent integrated into the Cherenkov security operations dashboard. 
+You assist security analysts with:
+- Interpreting scan findings (XSS, SQLi, SSRF, path traversal, file upload, XXE, etc.)
+- Explaining severity ratings (CRITICAL / HIGH / MEDIUM / LOW)
+- Recommending remediation steps
+- Mapping findings to compliance frameworks (OWASP, SAMA CSF, EGY_FIN_CSF, DORA)
+- Answering questions about the HITL (Human-in-the-Loop) approval workflow
+Keep responses concise, technical, and actionable. Never suggest sending data to external services.`;
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
 }
 
-async function sendMessage(history: Message[], userMessage: string): Promise<string> {
-  const payload = {
-    contents: [
-      ...history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      })),
-      { role: 'user', parts: [{ text: userMessage }] },
-    ],
-  };
-
-  const res = await fetch(`${AI_ENDPOINT}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+// Lazy-load the Gemini SDK to avoid import errors when key is absent
+async function createSession() {
+  if (!API_KEY) throw new Error('VITE_GEMINI_API_KEY is not set');
+  const { GoogleGenAI } = await import('@google/genai');
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+  return ai.chats.create({
+    model: MODEL,
+    config: { systemInstruction: SYSTEM_PROMPT },
   });
-
-  if (!res.ok) {
-    // Fallback: try root endpoint as a passthrough
-    const fallback = await fetch(AI_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!fallback.ok) throw new Error(`AI service error: ${fallback.status}`);
-    const data = await fallback.json();
-    return extractText(data);
-  }
-
-  const data = await res.json();
-  return extractText(data);
 }
 
-function extractText(data: unknown): string {
-  // Handle Gemini API response shape
-  if (
-    data &&
-    typeof data === 'object' &&
-    'candidates' in data &&
-    Array.isArray((data as { candidates: unknown[] }).candidates)
-  ) {
-    const d = data as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
-    return d.candidates[0]?.content?.parts?.[0]?.text ?? 'No response';
-  }
-  // Handle flat { text } or { response } shape
-  if (data && typeof data === 'object') {
-    const d = data as Record<string, unknown>;
-    if (typeof d.text === 'string') return d.text;
-    if (typeof d.response === 'string') return d.response;
-    if (typeof d.message === 'string') return d.message;
-    if (typeof d.content === 'string') return d.content;
-  }
-  return String(data);
+// Singleton chat session per page load
+let _chatPromise: ReturnType<typeof createSession> | null = null;
+function getChat() {
+  if (!_chatPromise) _chatPromise = createSession();
+  return _chatPromise;
 }
 
 export function AssistantWidget() {
@@ -73,11 +46,11 @@ export function AssistantWidget() {
     {
       role: 'assistant',
       content: 'CHERENKOV AI online. How can I assist your security operation?',
-      timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -93,25 +66,22 @@ export function AssistantWidget() {
     const text = input.trim();
     if (!text || loading) return;
 
-    const userMsg: Message = { role: 'user', content: text, timestamp: new Date() };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setInput('');
     setLoading(true);
+    setError(null);
 
     try {
-      const reply = await sendMessage(messages, text);
+      const chat = await getChat();
+      const response = await chat.sendMessage({ message: text });
+      const reply = response.text ?? 'No response received.';
+      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setError(msg);
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: reply, timestamp: new Date() },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: '⚠ Service unreachable. Check AI endpoint connectivity.',
-          timestamp: new Date(),
-        },
+        { role: 'assistant', content: `⚠ ${msg}` },
       ]);
     } finally {
       setLoading(false);
@@ -152,6 +122,13 @@ export function AssistantWidget() {
               </button>
             </div>
 
+            {/* No-key warning */}
+            {!API_KEY && (
+              <div className="px-3 py-2 bg-sev-critical/10 border-b border-sev-critical/20 text-[10px] text-sev-critical font-mono">
+                ⚠ Set VITE_GEMINI_API_KEY in .env to enable AI responses
+              </div>
+            )}
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-cherenkov-primary/20">
               {messages.map((msg, i) => (
@@ -178,7 +155,7 @@ export function AssistantWidget() {
                   </div>
                   <div
                     className={cn(
-                      'max-w-[80%] px-3 py-2 rounded-lg text-xs leading-relaxed',
+                      'max-w-[80%] px-3 py-2 rounded-lg text-xs leading-relaxed whitespace-pre-wrap',
                       msg.role === 'assistant'
                         ? 'bg-cherenkov-background/80 border border-cherenkov-primary/10 text-cherenkov-text'
                         : 'bg-cherenkov-accent/10 border border-cherenkov-accent/20 text-cherenkov-text'
@@ -196,7 +173,7 @@ export function AssistantWidget() {
                   </div>
                   <div className="bg-cherenkov-background/80 border border-cherenkov-primary/10 px-3 py-2 rounded-lg flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 text-cherenkov-primary animate-spin" />
-                    <span className="text-xs text-cherenkov-muted">Analysing...</span>
+                    <span className="text-xs text-cherenkov-muted font-mono">Analysing...</span>
                   </div>
                 </div>
               )}
@@ -211,12 +188,13 @@ export function AssistantWidget() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask about vulnerabilities, findings..."
-                  className="flex-1 bg-transparent text-xs text-cherenkov-text placeholder:text-cherenkov-muted outline-none font-mono"
+                  disabled={!API_KEY}
+                  placeholder={API_KEY ? 'Ask about vulnerabilities, findings...' : 'API key not set'}
+                  className="flex-1 bg-transparent text-xs text-cherenkov-text placeholder:text-cherenkov-muted outline-none font-mono disabled:opacity-40"
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || loading}
+                  disabled={!input.trim() || loading || !API_KEY}
                   className="text-cherenkov-primary hover:text-cherenkov-primary/80 disabled:opacity-30 transition-colors shrink-0"
                 >
                   <Send className="w-4 h-4" />
@@ -230,7 +208,7 @@ export function AssistantWidget() {
         )}
       </AnimatePresence>
 
-      {/* FAB trigger */}
+      {/* FAB */}
       <CyberButton
         onClick={() => setIsOpen(!isOpen)}
         variant="primary"
