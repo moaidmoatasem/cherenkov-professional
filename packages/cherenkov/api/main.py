@@ -8,6 +8,8 @@ packages/cherenkov/api/static/index.html via FastAPI StaticFiles.
 
 import asyncio
 import json
+import sqlite3
+import httpx
 import logging
 import os
 import re
@@ -34,8 +36,6 @@ logger = logging.getLogger(__name__)
 _STATIC_DIR = Path(__file__).parent / "static"
 
 # In-memory ring buffer of recent scan results (last 50).
-_scan_history: list[dict] = []
-
 app = FastAPI(
     title="cherenkov Sovereign Security API",
     description="Scan API, workflow orchestration, and web dashboard. Flask retired.",
@@ -94,6 +94,17 @@ async def ws_live(websocket: WebSocket) -> None:
 v1 = APIRouter(prefix="/api/v1")
 
 
+from cherenkov.core.storage.database import _DB_PATH
+
+
+def _get_active_scans_count() -> int:
+    try:
+        with sqlite3.connect(_DB_PATH) as conn:
+            return conn.execute("SELECT count(*) FROM scans WHERE status = 'running'").fetchone()[0]
+    except Exception:
+        return 0
+
+
 @v1.get("/health")
 async def v1_health() -> dict:
     """Health check used by useMetrics / useQueueDepth hooks.
@@ -101,18 +112,28 @@ async def v1_health() -> dict:
     Returns the node topology expected by NodeStatusRow and
     the Meissner shield state expected by ForensicHeader.
     """
-    active_scans = sum(1 for s in _scan_history[-5:] if s.get("_in_progress"))
+    from cherenkov.core.circuit_breaker import meissner_hub
+
+    active_scans = _get_active_scans_count()
+
+    ollama_status = "ready"
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.get("http://localhost:11434/api/tags", timeout=1.0)
+    except httpx.RequestError:
+        ollama_status = "offline"
+
     return {
         "status": "healthy",
         "agents": "operational",
         "queue": {"scan_jobs_pending": active_scans},
         "uptime": time.time(),
         "active_scans": active_scans,
-        "meissner": {"state": "CLOSED"},
+        "meissner": {"state": meissner_hub.state.value},
         "nodes": {
-            "tensor": {"status": "ready", "model": "Llama 3.1 8B"},
-            "kinetic": {"status": "ready", "model": "Qwen2.5 3B", "ram_gb": 8},
-            "aegis": {"status": "ready", "model": "Llama 3.1 8B", "ram_gb": 8},
+            "tensor": {"status": ollama_status, "model": "Llama 3.1 8B"},
+            "kinetic": {"status": ollama_status, "model": "Qwen2.5 3B", "ram_gb": 8},
+            "aegis": {"status": ollama_status, "model": "Llama 3.1 8B", "ram_gb": 8},
             "lattice": {"status": "ready", "model": "Qdrant / Vector", "vector_count": 0},
             "tokamak": {"status": "ready", "model": "Sandbox Ready", "active_containers": 0},
         },
@@ -154,10 +175,6 @@ async def v1_ablation_stats() -> dict:
 async def v1_scan(request: "ScanRequest") -> dict:
     """Proxy to the core scan engine; broadcasts a live event on completion."""
     result = await _run_scan(request)
-    # Persist to in-memory ring buffer for /scans/history
-    _scan_history.append(result)
-    if len(_scan_history) > 50:
-        _scan_history.pop(0)
     await _broadcast(
         {
             "type": "scan_complete",
@@ -173,8 +190,10 @@ async def v1_scan(request: "ScanRequest") -> dict:
 @v1.get("/scans/history")
 async def v1_scan_history() -> list[dict]:
     """Return recent scan results for the ThreatIntelPanel sidebar."""
-    # Return newest first
-    return list(reversed(_scan_history[-20:]))
+    from cherenkov.core.storage.database import list_scans
+
+    # list_scans already returns newest first
+    return list_scans(limit=20)
 
 
 # Serve the static dashboard assets
@@ -220,7 +239,7 @@ async def _run_scan(request: "ScanRequest") -> dict:
     """Core scan logic shared by /api/scan and /api/v1/scan."""
     from cherenkov.core.engine import ScanEngine
     from cherenkov.core.registry import ScannerRegistry
-    from cherenkov.core.storage.database import init_db, save_scan
+    from cherenkov.core.storage.database import init_db, save_scan, list_scans
 
     try:
         parsed = urlparse(request.url)
