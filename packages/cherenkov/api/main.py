@@ -292,6 +292,33 @@ async def v1_scan(
     return result
 
 
+@v1.get("/mesh/nodes")
+async def v1_mesh_nodes() -> list[dict]:
+    """List all discovered nodes in the multi-node mesh."""
+    from cherenkov.core.mesh import mesh_manager
+
+    nodes = mesh_manager.get_active_nodes()
+    return [
+        {
+            "id": n.id,
+            "ip": n.ip,
+            "port": n.port,
+            "status": n.status,
+            "last_seen": n.last_seen.isoformat(),
+        }
+        for n in nodes
+    ]
+
+
+@v1.post("/mesh/register")
+async def v1_mesh_register(node_id: str, ip: str, port: int) -> dict:
+    """Register a new node in the mesh (mDNS callback)."""
+    from cherenkov.core.mesh import mesh_manager
+
+    mesh_manager.register_node(node_id, ip, port)
+    return {"status": "success", "node_id": node_id}
+
+
 @v1.get("/scans/history")
 async def v1_scan_history() -> list[dict]:
     """Return recent scan results for the ThreatIntelPanel sidebar."""
