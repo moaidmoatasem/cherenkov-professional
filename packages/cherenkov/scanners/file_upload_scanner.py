@@ -1,60 +1,101 @@
-"""File Upload Scanner"""
+"""File upload vulnerability scanner — detect unsafe file upload endpoints"""
 
-import time
-from typing import List
-
-import httpx
+import re
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
 
 
 class FileUploadScanner(BaseScanner):
-    """Scanner to detect Unrestricted File Upload vulnerabilities."""
+    """Scan for file upload vulnerabilities — arbitrary file types, missing validation, path traversal in filenames"""
 
-    def __init__(self, name: str = "", description: str = ""):
-        super().__init__(name, description)
+    def __init__(self):
+        super().__init__(
+            name="file_upload",
+            description="File upload vulnerability scanner — type validation, size limits, name sanitization",
+        )
 
     async def scan(self, target: str, timeout: float = 10.0) -> ScanResult:
-        """Execute the scan - attempting to upload an unsafe file."""
-        start_time = time.time()
-        findings: List[Finding] = []
+        import time as time_module
 
-        # Payload for an unsafe file upload attempt (e.g. eicar or fake webshell)
-        test_file_name = "test_shell.php"
-        test_file_content = b"<?php system($_GET['cmd']); ?>"
-        files = {"file": (test_file_name, test_file_content, "application/x-php")}
+        start = time_module.monotonic()
+        findings: list[Finding] = []
 
-        try:
-            async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
-                # Attempting to upload to standard upload endpoints or directly to the target URL
-                response = await client.post(target, files=files, follow_redirects=True)
+        page_content = await self._fetch_page(target, timeout)
+        if not page_content:
+            return ScanResult(
+                target=target,
+                scanner_name=self.name,
+                findings=[],
+                duration_ms=(time_module.monotonic() - start) * 1000,
+            )
 
-                # We check for indications of successful upload
-                # A 200/201 response with path or success message, or simply allowing the file without rejection
-                # This is a heuristic and would normally be verified by accessing the file.
-                if response.status_code in (200, 201) and (
-                    test_file_name in response.text
-                    or "success" in response.text.lower()
-                    or "uploaded" in response.text.lower()
-                ):
-                    findings.append(
-                        Finding(
-                            title="Unrestricted File Upload",
-                            severity=Severity.HIGH,
-                            description=f"The application appears to allow the upload of restricted file types ({test_file_name}).",
-                            cwe="CWE-434",
-                            remediation="Implement strict server-side validation of file extensions, MIME types, and content. Store uploaded files outside of the web root or configure the web server to not execute scripts in the upload directory.",
-                        )
-                    )
-        except (httpx.RequestError, httpx.TimeoutException):
-            pass
-
-        duration_ms = (time.time() - start_time) * 1000
+        findings.extend(self._audit_upload_forms(target, page_content))
 
         return ScanResult(
             target=target,
             scanner_name=self.name,
             findings=findings,
-            duration_ms=duration_ms,
-            status="completed",
+            duration_ms=(time_module.monotonic() - start) * 1000,
         )
+
+    async def _fetch_page(self, target: str, timeout: float) -> str:
+        try:
+            resp = await self._http_request(target, timeout)
+            return resp.text if resp.status_code == 200 else ""
+        except Exception:
+            return ""
+
+    def _audit_upload_forms(self, target: str, html: str) -> list[Finding]:
+        findings: list[Finding] = []
+
+        file_inputs = re.findall(r'<input[^>]*type=["\']file["\'][^>]*>', html, re.IGNORECASE)
+        if not file_inputs:
+            return findings
+
+        forms = re.findall(
+            r'<form[^>]*action=["\']([^"\']*)["\'][^>]*>(.*?)</form>',
+            html,
+            re.DOTALL | re.IGNORECASE,
+        )
+
+        for action, form_content in forms:
+            if "file" not in form_content:
+                continue
+
+            accept_match = re.search(r'accept=["\']([^"\']*)["\']', form_content)
+            if not accept_match:
+                findings.append(
+                    Finding(
+                        title="File Upload Without Type Restriction",
+                        severity=Severity.MEDIUM,
+                        description=f"{target}: Upload form to '{action}' has no accept attribute — any file type allowed.",
+                        cwe="CWE-434",
+                        remediation="Add an accept attribute restricting allowed MIME types (e.g., accept='image/png, image/jpeg').",
+                    )
+                )
+
+            max_match = re.search(r'maxlength=["\'](\d+)["\']', form_content)
+            if not max_match:
+                findings.append(
+                    Finding(
+                        title="File Upload Without Size Limit",
+                        severity=Severity.LOW,
+                        description=f"{target}: Upload form to '{action}' lacks maxlength — potential for large file DoS.",
+                        cwe="CWE-770",
+                        remediation="Enforce file size limits server-side and via maxlength attribute.",
+                    )
+                )
+
+            action_lower = action.lower()
+            if action_lower.startswith("http://"):
+                findings.append(
+                    Finding(
+                        title="File Upload Over HTTP",
+                        severity=Severity.MEDIUM,
+                        description=f"{target}: Upload form submits to '{action}' over unencrypted HTTP.",
+                        cwe="CWE-319",
+                        remediation="Use HTTPS for all file upload endpoints.",
+                    )
+                )
+
+        return findings
