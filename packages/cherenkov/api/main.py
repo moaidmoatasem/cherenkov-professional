@@ -57,6 +57,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 # Include localhost:3000 (React dev server) alongside the API host origins
 _ALLOWED_ORIGINS = os.getenv(
     "cherenkov_CORS_ORIGINS",
@@ -117,8 +118,8 @@ v1 = APIRouter(prefix="/api/v1")
 
 async def _check_ollama() -> str:
     try:
-        async with httpx.AsyncClient(timeout=10.0) as c:
-            r = await c.get("http://localhost:11434/")
+        async with httpx.AsyncClient(timeout=1.0) as c:
+            r = await c.get("http://localhost:11434/api/tags")
             return "ready" if r.status_code == 200 else "offline"
     except Exception:
         return "offline"
