@@ -501,11 +501,35 @@ class Meissner(CircuitBreaker):
     def __init__(self, config: Optional[CircuitBreakerConfig] = None):
         super().__init__(config)
         self._isolation_active = False
+        self._on_open_callbacks = []
+
+    def on_open(self, callback: Callable[[], None]) -> None:
+        """Register a callback to be called when the circuit opens."""
+        self._on_open_callbacks.append(callback)
 
     def _transition_to_open(self) -> None:
         """Transition to OPEN and enforce fail-closed isolation."""
         super()._transition_to_open()
         self.fail_closed()
+        for callback in self._on_open_callbacks:
+            try:
+                callback()
+            except Exception as e:
+                logger.error(f"Error in Meissner on_open callback: {e}")
+
+        # Broadcast the state change
+        try:
+            from cherenkov.api.main import _broadcast
+
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                _broadcast(
+                    {"type": "circuit_breaker", "state": "OPEN", "reason": "threshold_exceeded"}
+                )
+            )
+        except (ImportError, RuntimeError):
+            # E.g. no event loop running, ignore
+            pass
 
     def _transition_to_closed(self) -> None:
         """Transition to CLOSED and restore network connectivity."""
