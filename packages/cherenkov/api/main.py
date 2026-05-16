@@ -655,6 +655,17 @@ async def dashboard() -> FileResponse:
 # ── Shared scan implementation ────────────────────────────────────────────────
 
 
+async def _forward_to_siem(vulnerabilities: list[dict], target: str):
+    """Background task to forward findings to local SIEM."""
+    from cherenkov.core.siem import SIEMForwarder
+
+    for v in vulnerabilities:
+        finding = {**v, "target": target}
+        # Default local syslog forward (UDP 514)
+        SIEMForwarder.send_syslog(finding)
+        logger.debug("Forwarded finding to local SIEM: %s", v["title"])
+
+
 async def _run_scan(request: "ScanRequest") -> dict:
     """Core scan logic shared by /api/scan and /api/v1/scan."""
     from cherenkov.core.engine import ScanEngine
@@ -770,6 +781,9 @@ async def _run_scan(request: "ScanRequest") -> dict:
 
     except Exception as exc:
         logger.error("Failed to persist scan %s: %s", scan_id, exc)
+
+    # Trigger SIEM forwarding
+    asyncio.create_task(_forward_to_siem(vulnerabilities, request.url))
 
     return {
         "scan_id": scan_id,
