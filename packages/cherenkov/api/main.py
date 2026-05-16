@@ -21,7 +21,17 @@ from typing import Any, Dict, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
@@ -264,6 +274,39 @@ async def v1_sandbox_execute(
 async def v1_sandbox_status(current_user: AuthUser = Depends(get_current_user)) -> dict:
     """Return the status of the TOKAMAK sandbox."""
     return {"status": "operational", "containers_active": 0}
+
+
+@v1.post("/mobile/scan")
+async def v1_mobile_scan(
+    file: UploadFile = File(...),
+    package_name: Optional[str] = Form(None),
+    current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR)),
+) -> dict:
+    """Accept an APK/IPA file for triage. Requires OPERATOR role."""
+    scan_id = str(uuid.uuid4())
+    # In a real implementation, we would save the file and trigger the mobile scanners
+    # For the triage dashboard, we return metadata and a placeholder success.
+    return {
+        "status": "success",
+        "scan_id": scan_id,
+        "filename": file.filename,
+        "package_name": package_name,
+        "message": "Mobile triage initiated.",
+        "findings": [
+            {
+                "id": "mob-1",
+                "title": "Insecure Logging",
+                "severity": "MEDIUM",
+                "evidence": "Log.d detected in MainActivity.java",
+            },
+            {
+                "id": "mob-2",
+                "title": "Hardcoded API Key",
+                "severity": "HIGH",
+                "evidence": "AIzaSy... found in strings.xml",
+            },
+        ],
+    }
 
 
 @v1.post("/scan")

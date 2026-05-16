@@ -5,11 +5,13 @@ import { ForensicHeader } from './components/organisms/ForensicHeader';
 import { TacticalOperationsPanel } from './components/organisms/TacticalOperationsPanel';
 import { ThreatIntelPanel } from './components/organisms/ThreatIntelPanel';
 import { LogoKit, AssistantWidget } from './components/organisms';
+import { MobileDashboard } from './components/templates/MobileDashboard';
 import { AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(sessionStorage.getItem('cherenkov_token'));
   const [showLogoKit, setShowLogoKit] = useState(false);
+  const [view, setView] = useState<'tactical' | 'mobile'>('tactical');
 
   if (!token) {
     return <LoginPage onLoginSuccess={setToken} />;
@@ -17,11 +19,31 @@ export default function App() {
 
   return (
     <>
-      <MainLayout 
-        header={<ForensicHeader />}
-        content={<TacticalOperationsPanel />}
-        sidebar={<ThreatIntelPanel />}
-      />
+      {view === 'tactical' ? (
+        <MainLayout 
+          header={<ForensicHeader />}
+          content={<TacticalOperationsPanel />}
+          sidebar={<ThreatIntelPanel />}
+        />
+      ) : (
+        <MobileDashboard />
+      )}
+
+      {/* View Switcher Overlay (Temporary until Header integration) */}
+      <div className="fixed bottom-4 left-4 flex gap-2 z-50">
+        <button 
+          onClick={() => setView('tactical')}
+          className={`px-3 py-1 text-[10px] font-mono border ${view === 'tactical' ? 'bg-hud-cyan text-black border-hud-cyan' : 'bg-black text-hud-cyan border-hud-cyan/40'}`}
+        >
+          TACTICAL
+        </button>
+        <button 
+          onClick={() => setView('mobile')}
+          className={`px-3 py-1 text-[10px] font-mono border ${view === 'mobile' ? 'bg-hud-cyan text-black border-hud-cyan' : 'bg-black text-hud-cyan border-hud-cyan/40'}`}
+        >
+          MOBILE_TRIAGE
+        </button>
+      </div>
 
       {/* Legacy LogoKit Support (updated check) */}
       <AnimatePresence>
