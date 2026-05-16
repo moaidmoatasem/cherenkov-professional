@@ -188,10 +188,15 @@ async def v1_scan(request: "ScanRequest") -> dict:
 @v1.get("/scans/history")
 async def v1_scan_history() -> list[dict]:
     """Return recent scan results for the ThreatIntelPanel sidebar."""
-    from cherenkov.core.storage.database import list_scans
+    from cherenkov.core.storage.database import _DB_PATH, _row_to_dict
 
-    # list_scans already returns newest first
-    return list_scans(limit=20)
+    try:
+        with sqlite3.connect(_DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM scans ORDER BY finished_at DESC LIMIT 20").fetchall()
+        return [_row_to_dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 # Serve the static dashboard assets
