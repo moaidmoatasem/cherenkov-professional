@@ -25,7 +25,7 @@ class FileUploadScanner(BaseScanner):
         files = {"file": (test_file_name, test_file_content, "application/x-php")}
 
         try:
-            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+            async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
                 # Attempting to upload to standard upload endpoints or directly to the target URL
                 response = await client.post(target, files=files, follow_redirects=True)
 

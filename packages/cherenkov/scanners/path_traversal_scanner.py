@@ -27,7 +27,7 @@ class PathTraversalScanner(BaseScanner):
         ]
 
         try:
-            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+            async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
                 for payload in payloads:
                     # Append the payload to the target URL. Assuming the target is a vulnerable endpoint like /download?file=
                     # We will append the payload to the URL and check the response.

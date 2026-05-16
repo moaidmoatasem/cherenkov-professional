@@ -24,7 +24,7 @@ class XXEScanner(BaseScanner):
 
         try:
             # We must use httpx.AsyncClient here per requirements, zero outbound calls beyond target URL
-            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+            async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
                 response = await client.post(
                     target,
                     content=xxe_payload,
