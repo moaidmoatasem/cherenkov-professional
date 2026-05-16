@@ -8,11 +8,10 @@ packages/cherenkov/api/static/index.html via FastAPI StaticFiles.
 
 import asyncio
 import json
-import sqlite3
-import httpx
 import logging
 import os
 import re
+import sqlite3
 import time
 import uuid
 from datetime import datetime, timezone
@@ -20,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -27,6 +27,7 @@ from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from cherenkov.core.storage.database import _DB_PATH
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
 from cherenkov.orchestration.workflow_parser import load_workflow
@@ -92,9 +93,6 @@ async def ws_live(websocket: WebSocket) -> None:
 # ── /api/v1 router (consumed by the React frontend) ─────────────────────────
 
 v1 = APIRouter(prefix="/api/v1")
-
-
-from cherenkov.core.storage.database import _DB_PATH
 
 
 def _get_active_scans_count() -> int:
@@ -239,7 +237,7 @@ async def _run_scan(request: "ScanRequest") -> dict:
     """Core scan logic shared by /api/scan and /api/v1/scan."""
     from cherenkov.core.engine import ScanEngine
     from cherenkov.core.registry import ScannerRegistry
-    from cherenkov.core.storage.database import init_db, save_scan, list_scans
+    from cherenkov.core.storage.database import init_db, save_scan
 
     try:
         parsed = urlparse(request.url)
