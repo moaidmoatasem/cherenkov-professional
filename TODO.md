@@ -1,16 +1,24 @@
 # CHERENKOV TODO — Phase 2 Active Sprint
 
+## Sprint 2: Orchestration Hardening [DONE ✅]
+- [x] `ScanEngine.scan_all()` — true asyncio gather across all registered scanners (#182)
+- [x] Per-scanner timeout isolation (one scanner failure doesn't kill others) (#182)
+- [x] Broadcast `scan_progress` WS events per scanner completion (#182)
+- [x] Integration test: parallel scan finishes faster than sequential (#182)
+- [x] Target-level circuit breaker (Meissner) integration (#182)
+
 ## Sprint 3: TOKAMAK Execution Sandbox [IN PROGRESS]
 - [ ] Wire `core/tokamak.py` to `Dockerfile.tokamak` — pass sandbox a `Command` payload, return signed JSON receipt
 - [ ] Implement cryptographic erasure ("shred receipt") after sandbox teardown per CLAUDE.md invariant
 - [ ] Write `tests/unit/test_tokamak.py` — verify: payload reaches sandbox, output is SHA-256 signed, receipt is valid JSON
 - [ ] Add `GET /api/v1/sandbox/status` FastAPI endpoint so dashboard can poll TOKAMAK state
 
-## Sprint 4: HITL Workflows [NOT STARTED]
-- [ ] `POST /api/v1/findings/{id}/approve` — pause workflow, require operator signature before HIGH/CRITICAL PoC execution
-- [ ] `GET /api/v1/findings/pending` — list findings awaiting approval
-- [ ] Frontend: `PendingApprovalsPanel` organism — badge count in `ForensicHeader`, full list in sidebar
-- [ ] Store pending state in SQLite (WAL mode) so restarts don't lose pending approvals
+## Sprint 4: HITL Workflows [DONE ✅]
+- [x] `POST /api/v1/findings/{id}/approve` — pause workflow, require operator signature before HIGH/CRITICAL PoC execution
+- [x] `GET /api/v1/findings/pending` — list findings awaiting approval
+- [x] `POST /api/v1/findings/{id}/reject` — reject finding with operator audit
+- [x] Store pending state in SQLite (WAL mode) so restarts don't lose pending approvals
+- [x] Frontend: `PendingApprovalsPanel` organism — badge count in `ForensicHeader`, full list in sidebar
 
 ## Sprint 5: Compliance & Reporting [NOT STARTED]
 - [ ] Build `packages/cherenkov/compliance/` mapper: CWE/CVE → SAMA CSF / EGY-FIN CSF / DORA / OWASP Top 10
