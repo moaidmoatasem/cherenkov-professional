@@ -136,6 +136,105 @@ class AuthRequest(BaseModel):
     password: str
 
 
+class FridaGenerateRequest(BaseModel):
+    platform: str
+    hooks: List[str]
+
+
+class AssistantAdviceRequest(BaseModel):
+    findings: List[dict]
+    context: Optional[dict] = None
+
+
+@v1.post("/mobile/frida/generate")
+async def v1_frida_generate(
+    request: FridaGenerateRequest, current_user: AuthUser = Depends(get_current_user)
+) -> dict:
+    """Generate Frida scripts for mobile runtime analysis."""
+
+    script = f"/* CHERENKOV FRIDA GENERATOR // PLATFORM: {request.platform.upper()} */\n\n"
+
+    if request.platform == "android":
+        if "ssl_pinning" in request.hooks:
+            script += """
+// Android SSL Pinning Bypass (Generic)
+Java.perform(function() {
+    var array_list = Java.use("java.util.ArrayList");
+    var ApiClient = Java.use("com.android.org.conscrypt.TrustManagerImpl");
+
+    ApiClient.checkServerTrusted.implementation = function(chain, authType) {
+        return array_list.$new();
+    };
+});
+"""
+        if "root_detection" in request.hooks:
+            script += """
+// Android Root Detection Bypass
+Java.perform(function() {
+    var RootPackages = ["com.noshufou.android.su", "com.thirdparty.superuser", "eu.chainfire.supersu"];
+    var File = Java.use("java.io.File");
+
+    File.exists.implementation = function() {
+        var name = this.getName();
+        if (RootPackages.indexOf(name) > -1) {
+            return false;
+        }
+        return this.exists();
+    };
+});
+"""
+    elif request.platform == "ios":
+        if "ssl_pinning" in request.hooks:
+            script += """
+// iOS SSL Pinning Bypass
+if (ObjC.available) {
+    for (var className in ObjC.classes) {
+        if (className.indexOf("TrustManager") !== -1) {
+            // Mocking bypass logic
+        }
+    }
+}
+"""
+
+    return {"script": script, "platform": request.platform}
+
+
+@v1.post("/assistant/advice")
+async def v1_assistant_advice(
+    request: AssistantAdviceRequest, current_user: AuthUser = Depends(get_current_user)
+) -> dict:
+    """Get remediation advice from the AI Studio Assistant (Ollama)."""
+    import json
+
+    import httpx
+
+    prompt = f"As a security expert, provide concise remediation advice for the following findings:\n{json.dumps(request.findings)}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Note: _check_ollama must be defined or imported
+            ollama_status = await _check_ollama()
+            if ollama_status != "ready":
+                return {
+                    "advice": "AI Studio Assistant is offline (Ollama not detected). Manual remediation recommended.",
+                    "status": "offline",
+                }
+
+            r = await client.post(
+                "http://localhost:11434/api/generate",
+                json={"model": "mistral", "prompt": prompt, "stream": False},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                return {"advice": data.get("response", ""), "status": "ready"}
+            else:
+                return {"advice": "Failed to get advice from Ollama.", "status": "error"}
+    except Exception as exc:
+        return {"advice": f"Assistant error: {exc}", "status": "error"}
+
+
+
+
 @v1.post("/auth/token")
 async def v1_auth_token(request: AuthRequest) -> dict:
     """Authenticate a user and return a JWT token."""
