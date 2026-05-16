@@ -106,7 +106,6 @@ async def ws_live(websocket: WebSocket) -> None:
 v1 = APIRouter(prefix="/api/v1")
 
 
-import httpx
 
 
 async def _check_ollama() -> str:
