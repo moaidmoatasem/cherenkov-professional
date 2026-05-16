@@ -492,7 +492,22 @@ async def _run_scan(request: "ScanRequest") -> dict:
     try:
         registry = ScannerRegistry()
         engine = ScanEngine(registry)
-        scan_results = await engine.scan_all(request.url, timeout=10.0)
+
+        async def on_scan_progress(scanner_name: str, status: str, result: Any):
+            # Wrap the websocket broadcast in a task
+            asyncio.create_task(
+                _broadcast(
+                    {
+                        "type": "scan_progress",
+                        "scanner": scanner_name,
+                        "status": status,
+                    }
+                )
+            )
+
+        scan_results = await engine.scan_all(
+            request.url, timeout=10.0, progress_callback=on_scan_progress
+        )
     except Exception as exc:
         logger.error("ScanEngine failed for %s: %s", request.url, exc)
         raise HTTPException(status_code=500, detail=f"Scan execution failed: {exc}") from exc

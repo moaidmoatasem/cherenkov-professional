@@ -23,7 +23,23 @@ class ScanEngine:
         scanner = scanner_class(scanner_class.__name__, "")
 
         start_time = time.time()
-        result = await scanner.scan(target, timeout)
+        try:
+            result = await asyncio.wait_for(scanner.scan(target, timeout), timeout=timeout)
+        except asyncio.TimeoutError:
+            result = ScanResult(
+                target=target,
+                scanner_name=scanner_name,
+                status="failed",
+                findings=[],
+            )
+        except Exception:
+            result = ScanResult(
+                target=target,
+                scanner_name=scanner_name,
+                status="failed",
+                findings=[],
+            )
+
         result.duration_ms = (time.time() - start_time) * 1000
 
         return result
@@ -34,6 +50,7 @@ class ScanEngine:
         scanners: List[str] = None,
         timeout: float = 10.0,
         max_concurrent: int = 10,
+        progress_callback=None,
     ) -> Dict[str, ScanResult]:
         """Run all scanners concurrently"""
         if scanners is None:
@@ -43,7 +60,28 @@ class ScanEngine:
 
         async def scan_with_semaphore(scanner_name: str) -> ScanResult:
             async with semaphore:
-                return await self.scan_single(scanner_name, target, timeout)
+                try:
+                    result = await self.scan_single(scanner_name, target, timeout)
+                    if progress_callback:
+                        status_str = "failed" if result.status == "failed" else "completed"
+                        try:
+                            await progress_callback(scanner_name, status_str, result)
+                        except Exception:
+                            pass
+                    return result
+                except Exception:
+                    res = ScanResult(
+                        target=target,
+                        scanner_name=scanner_name,
+                        status="failed",
+                        findings=[],
+                    )
+                    if progress_callback:
+                        try:
+                            await progress_callback(scanner_name, "failed", res)
+                        except Exception:
+                            pass
+                    return res
 
         tasks = [scan_with_semaphore(s) for s in scanners]
         results = await asyncio.gather(*tasks, return_exceptions=True)
