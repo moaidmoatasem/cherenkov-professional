@@ -1,0 +1,48 @@
+name: 'cherenkov-scan'
+description: 'Run Cherenkov Security Scan and upload SARIF results'
+inputs:
+  target-url:
+    description: 'URL of the application to scan'
+    required: true
+  cherenkov-token:
+    description: 'API token for Cherenkov'
+    required: true
+  cherenkov-api-base:
+    description: 'Base URL of the Cherenkov API'
+    required: false
+    default: 'https://api.cherenkov.io/api/v1'
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Cherenkov Scan
+      shell: bash
+      env:
+        CHERENKOV_TOKEN: ${{ inputs.cherenkov-token }}
+        CHERENKOV_API: ${{ inputs.cherenkov-api-base }}
+        TARGET_URL: ${{ inputs.target-url }}
+      run: |
+        echo "Starting Cherenkov Scan for $TARGET_URL..."
+        SCAN_ID=$(curl -s -X POST "$CHERENKOV_API/scan" \
+          -H "Authorization: Bearer $CHERENKOV_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{\"url\": \"$TARGET_URL\"}" | jq -r '.scan_id')
+        
+        echo "Scan initiated: $SCAN_ID. Waiting for results..."
+        
+        # Wait for completion (simple poll)
+        MAX_RETRIES=30
+        for i in $(seq 1 $MAX_RETRIES); do
+          STATUS=$(curl -s -H "Authorization: Bearer $CHERENKOV_TOKEN" "$CHERENKOV_API/reports/$SCAN_ID/sarif" | jq -r '.version' 2>/dev/null)
+          if [ "$STATUS" = "2.1.0" ]; then
+            echo "Scan complete!"
+            curl -s -H "Authorization: Bearer $CHERENKOV_TOKEN" "$CHERENKOV_API/reports/$SCAN_ID/sarif" > cherenkov-results.sarif
+            break
+          fi
+          sleep 10
+        done
+
+    - name: Upload SARIF results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: cherenkov-results.sarif
+        category: cherenkov

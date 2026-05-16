@@ -1,154 +1,92 @@
-import asyncio
 import json
-import logging
-from enum import Enum
+import sys
+from pathlib import Path
 
+import httpx
 import typer
-from rich.console import Console
-from rich.table import Table
 
-from cherenkov.core.storage.database import init_db, list_scans, save_scan
+app = typer.Typer(help="cherenkov Security CLI - Precision in Sovereignty")
 
-logger = logging.getLogger(__name__)
-
-app = typer.Typer(name="cherenkov", help="cherenkov security scanner CLI", no_args_is_help=True)
-console = Console()
+API_BASE = "http://localhost:8000/api/v1"
 
 
-class OutputFormat(str, Enum):
-    table = "table"
-    json = "json"
-    sarif = "sarif"
-
-
-def _get_registry() -> "ScannerRegistry":  # noqa: F821
-    # Lazy import — registry pulls pydantic which may not be installed in minimal envs.
-    try:
-        from cherenkov.core.registry import ScannerRegistry
-
-        return ScannerRegistry()
-    except ImportError as exc:
-        console.print(f"[red]Registry unavailable:[/red] {exc}")
-        raise typer.Exit(code=1) from exc
+def get_headers():
+    token = (
+        Path(".cherenkov_token").read_text().strip() if Path(".cherenkov_token").exists() else ""
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 @app.command()
 def scan(
-    target: str = typer.Argument(..., help="Target URL or host to scan"),
-    output: OutputFormat = typer.Option(OutputFormat.table, "--output", "-o", help="Output format"),
-    rps: float = typer.Option(5.0, "--rps", help="Requests per second cap"),
-) -> None:
-    """Run all registered scanners against TARGET."""
-    import uuid
-    from datetime import datetime, timezone
-
-    from cherenkov.core.engine import ScanEngine
-    from cherenkov.core.registry import ScannerRegistry
-
-    init_db()
-    scan_id = str(uuid.uuid4())
-    started = datetime.now(timezone.utc).isoformat()
-    console.print(f"[bold]Illuminating target[/bold] {target}  (rps={rps}, output={output.value})")
-
-    # Wire execution through ScanEngine — replaces empty placeholder list
+    url: str = typer.Argument(..., help="Target URL to scan"),
+    format: str = typer.Option("json", "--format", "-f", help="Output format (json, sarif)"),
+):
+    """Run a full security scan against a target URL."""
     try:
-        registry = ScannerRegistry()
-        engine = ScanEngine(registry)
-        scan_results = asyncio.run(engine.scan_all(target, timeout=10.0))
-    except Exception as exc:
-        logger.error("ScanEngine execution failed for %s: %s", target, exc)
-        console.print(f"[red]Scan failed:[/red] {exc}")
-        raise typer.Exit(code=1) from exc
+        with httpx.Client(timeout=300) as client:
+            typer.echo(f"[*] Initiating scan for: {url}")
+            resp = client.post(f"{API_BASE}/scan", json={"url": url}, headers=get_headers())
+            resp.raise_for_status()
+            result = resp.json()
 
-    # Flatten ScanResult objects → plain dicts for storage and display
-    findings: list[dict] = []
-    for scanner_name, result in scan_results.items():
-        for f in result.findings:
-            findings.append(
-                {
-                    "scanner": scanner_name,
-                    "title": f.title,
-                    "severity": f.severity.value,
-                    "cwe": f.cwe,
-                    "description": f.description,
-                    "remediation": f.remediation,
-                }
-            )
+            if format == "sarif":
+                # Fetch SARIF export if requested
+                scan_id = result.get("scan_id")
+                sarif_resp = client.get(
+                    f"{API_BASE}/reports/{scan_id}/sarif", headers=get_headers()
+                )
+                sarif_resp.raise_for_status()
+                typer.echo(json.dumps(sarif_resp.json(), indent=2))
+            else:
+                typer.echo(json.dumps(result, indent=2))
 
-    finished = datetime.now(timezone.utc).isoformat()
-    save_scan(
-        scan_id,
-        target,
-        findings,
-        meta={"rps": rps, "scanners_run": list(scan_results.keys())},
-        started_at=started,
-        finished_at=finished,
-    )
-
-    if output == OutputFormat.json:
-        console.print_json(json.dumps({"scan_id": scan_id, "target": target, "findings": findings}))
-    elif output == OutputFormat.sarif:
-        sarif_results = [
-            {
-                "ruleId": f.get("cwe", ""),
-                "message": {"text": f.get("title", "")},
-                "level": f.get("severity", "none").lower(),
-            }
-            for f in findings
-        ]
-        sarif = {
-            "version": "2.1.0",
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "runs": [
-                {
-                    "tool": {"driver": {"name": "cherenkov", "rules": []}},
-                    "results": sarif_results,
-                }
-            ],
-        }
-        console.print_json(json.dumps(sarif))
-    else:
-        t = Table("Finding", "Severity", "CWE", "Scanner", title=f"Cherenkov Trace — {target}")
-        for f in findings:
-            t.add_row(
-                f.get("title", ""), f.get("severity", ""), f.get("cwe", ""), f.get("scanner", "")
-            )
-        console.print(t if findings else "[green]No anomalies isolated.[/green]")
-
-    console.print(f"[dim]scan_id: {scan_id}[/dim]")
+    except Exception as e:
+        typer.echo(f"[!] Scan failed: {e}", err=True)
+        sys.exit(1)
 
 
 @app.command()
-def history(
-    n: int = typer.Option(20, "-n", help="Number of recent scans to show"),
-) -> None:
-    """Show the N most recent scan results."""
-    init_db()
-    rows = list_scans(limit=n)
-    if not rows:
-        console.print("[yellow]No scan history found.[/yellow]")
-        return
-    t = Table("scan_id", "target", "status", "started_at", "findings #")
-    for r in rows:
-        t.add_row(r["scan_id"], r["target"], r["status"], r["started_at"], str(len(r["findings"])))
-    console.print(t)
+def report(
+    scan_id: str = typer.Argument(..., help="ID of the scan to report"),
+    format: str = typer.Option("pdf", "--format", "-f", help="Report format (pdf, sarif)"),
+):
+    """Generate and download a security report."""
+    try:
+        with httpx.Client() as client:
+            url = f"{API_BASE}/reports/{scan_id}/{format}"
+            resp = client.get(url, headers=get_headers())
+            resp.raise_for_status()
+
+            output_file = f"report_{scan_id}.{format}"
+            with open(output_file, "wb") as f:
+                f.write(resp.content)
+            typer.echo(f"[+] Report saved to: {output_file}")
+
+    except Exception as e:
+        typer.echo(f"[!] Report generation failed: {e}", err=True)
+        sys.exit(1)
 
 
-@app.command(name="list-scanners")
-def list_scanners() -> None:
-    """List all registered scanners."""
-    registry = _get_registry()
-    names = registry.list_scanners()
-    if not names:
-        console.print("[yellow]No scanners registered.[/yellow]")
-        return
-    t = Table("Name", "CWE", "Description")
-    for name in names:
-        scanner_cls = registry.get_scanner(name)
-        t.add_row(
-            name, getattr(scanner_cls, "cwe", "—"), getattr(scanner_cls, "__doc__", "—") or "—"
-        )
-    console.print(t)
+@app.command()
+def login(
+    username: str = typer.Option(..., prompt=True),
+    password: str = typer.Option(..., prompt=True, hide_input=True),
+):
+    """Authenticate with the Cherenkov API."""
+    try:
+        with httpx.Client() as client:
+            resp = client.post(
+                "http://localhost:8000/api/v1/auth/login",
+                data={"username": username, "password": password},
+            )
+            resp.raise_for_status()
+            token = resp.json().get("access_token")
+            Path(".cherenkov_token").write_text(token)
+            typer.echo("[+] Authentication successful. Token saved to .cherenkov_token")
+    except Exception as e:
+        typer.echo(f"[!] Login failed: {e}", err=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
