@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import time
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -25,6 +27,7 @@ from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from cherenkov.core.storage.database import _DB_PATH
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
 from cherenkov.orchestration.workflow_parser import load_workflow
@@ -115,6 +118,14 @@ async def _check_ollama() -> str:
         return "offline"
 
 
+def _get_active_scans_count() -> int:
+    try:
+        with sqlite3.connect(_DB_PATH) as conn:
+            return conn.execute("SELECT count(*) FROM scans WHERE status = 'running'").fetchone()[0]
+    except Exception:
+        return 0
+
+
 @v1.get("/health")
 async def v1_health() -> dict:
     """Health check used by useMetrics / useQueueDepth hooks.
@@ -123,9 +134,8 @@ async def v1_health() -> dict:
     the Meissner shield state expected by ForensicHeader.
     """
     from cherenkov.core.circuit_breaker import meissner_hub
-    from cherenkov.core.storage.database import list_scans
 
-    active_scans = sum(1 for s in list_scans(20) if s.get("status") == "running")
+    active_scans = _get_active_scans_count()
     ollama_status = await _check_ollama()
     meissner_state = meissner_hub.state.value.upper()
 
