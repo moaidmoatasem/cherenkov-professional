@@ -17,15 +17,17 @@
 |---|---|---|
 | Sprint 1 — BaseScanner | Uniform scanner interface | ✅ Done — `packages/cherenkov/core/base_scanner.py` |
 | Sprint 2 — Parallel Orchestration | asyncio + AIMD circuit breakers | ✅ Done — `circuit_breaker.py`, `ai_workflows_orchestrator.py` |
-| Sprint 3 — TOKAMAK Sandbox | Docker isolation + PoC execution | 🔄 In Progress — `core/tokamak.py` exists, Docker wire-up pending |
-| Sprint 4 — HITL Workflows | API pause gate + UI approval flow | ⏳ Not started |
-| Sprint 5 — Compliance & Reporting | SAMA/EGY-FIN mapping + PDF/SARIF | ⏳ Not started |
+| Sprint 3 — TOKAMAK Sandbox | Docker isolation + PoC execution | ✅ Done — tokamak.py with Command pattern, SHA-256 signing, shred receipt |
+| Sprint 4 — HITL Workflows | API pause gate + UI approval flow | ✅ Done — approve/reject endpoints, pending findings, audit vault |
+| Sprint 5 — Compliance & Reporting | SAMA/EGY-FIN mapping + PDF/SARIF | ✅ Done — 19 CWE mappings, mapper with map_all()/coverage(), SARIF + PDF export |
 
 ## Active Work
 - **Frontend dashboard** (`packages/cherenkov/web/`) — React 19 / Vite / Tailwind v4, live scan results, WebSocket events ✅
 - **FastAPI backend** (`packages/cherenkov/api/main.py`) — `/api/v1/*` routes, `/ws/live` WebSocket, scan history ✅
+- **Compliance module** (`packages/cherenkov/compliance/`) — 19 CWE → OWASP/SAMA/EGY-FIN/DORA mappings, SARIF + PDF export ✅
+- **HITL workflows** — approve/reject endpoints, pending findings, audit vault ✅
+- **TOKAMAK sandbox** — Docker execution with Command pattern, SHA-256 signing, shred receipt ✅
 - **Scanner graduation** — promoting `autonomous_generated/scanners/` into `packages/cherenkov/scanners/` under `BaseScanner` contract
-- **TOKAMAK Docker** — `Dockerfile.tokamak` + `core/tokamak.py` need `Command` pattern + sandbox network isolation
 
 ## Agent Coordination
 | Agent | Domain | Channel |
