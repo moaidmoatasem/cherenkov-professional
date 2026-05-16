@@ -19,12 +19,26 @@
 - [x] `GET /api/v1/reports/{scan_id}/pdf` — generate local PDF audit report (reportlab, zero cloud)
 - [x] Map compliance framework to `NewScanForm.tsx` `compliance` dropdown options
 - [x] Unit tests — 14 tests covering all 4 frameworks, map_all(), coverage()
+- [x] Business Process Mapping — `ProcessMapper`: 7 business processes → process flows → CWEs → compliance frameworks
+- [x] `GET /api/v1/processes` — list available business processes by category
+- [x] `GET /api/v1/processes/{id}/controls` — get security controls per process step
+- [x] `GET /api/v1/processes/{id}/report` — generate process-specific risk & compliance report
 
-## Backend Hardening [ONGOING]
-- [ ] Move `_scan_history` from in-memory list to SQLite WAL vault (survives restart)
-- [ ] `GET /api/v1/health` — wire `meissner.state` from real `CircuitBreakerRegistry` instead of hardcoded `"CLOSED"`
-- [ ] `GET /api/v1/health` — wire `nodes` to actual Ollama process check (ping localhost:11434)
-- [ ] Broadcast `circuit_breaker` WebSocket events from `Meissner._transition_to_open()`
+## Backend Hardening [DONE ✅]
+- [x] Move `_scan_history` from in-memory list to SQLite WAL vault (survives restart)
+- [x] `GET /api/v1/health` — wire `meissner.state` from real `CircuitBreakerRegistry` instead of hardcoded `"CLOSED"`
+- [x] `GET /api/v1/health` — wire `nodes` to actual Ollama process check (ping localhost:11434)
+- [x] Broadcast `circuit_breaker` WebSocket events from `Meissner._transition_to_open()`
+
+## Phase 4: Mobile Triage [DONE ✅]
+- [x] Implement IPA/ATS/Binary scanners for iOS/Android forensic auditing
+- [x] Create `MobileDashboard` with specialized binary ingestion port
+- [x] Implement Frida/Drozer hooks for dynamic analysis in TOKAMAK
+
+## Phase 5: Enterprise Orchestration [DONE ✅]
+- [x] `SIEMForwarder` — Syslog (CEF) and Splunk HEC event streaming
+- [x] `MeshManager` — Multi-node discovery and distributed scan coordination
+- [x] `LatticeBridge` — Semantic Vector Intelligence via Qdrant and local embeddings
 
 ## Scanner Graduation [ONGOING]
 - [ ] Audit `autonomous_generated/scanners/` — identify the 5-10 best implementations

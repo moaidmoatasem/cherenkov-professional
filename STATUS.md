@@ -9,8 +9,8 @@
 | TypeScript (web) | ✅ Zero errors |
 | Vite build | ✅ Clean (414 kB JS, 54 kB CSS) |
 
-## Current Phase: Phase 2 — Swarm Optimization & Parallelism
-**Target:** v1.1.0 | **Timeline:** Q2 2026
+## Current Phase: Phase 5 — Enterprise Integration (Hidden Nebula)
+**Target:** v1.5.0 | **Timeline:** Q2 2026
 
 ### Sprint Progress
 | Sprint | Goal | Status |
@@ -18,8 +18,8 @@
 | Sprint 1 — BaseScanner | Uniform scanner interface | ✅ Done — `packages/cherenkov/core/base_scanner.py` |
 | Sprint 2 — Parallel Orchestration | asyncio + AIMD circuit breakers | ✅ Done — `circuit_breaker.py`, `ai_workflows_orchestrator.py` |
 | Sprint 3 — TOKAMAK Sandbox | Docker isolation + PoC execution | ✅ Done — tokamak.py with Command pattern, SHA-256 signing, shred receipt |
-| Sprint 4 — HITL Workflows | API pause gate + UI approval flow | ✅ Done — approve/reject endpoints, pending findings, audit vault |
-| Sprint 5 — Compliance & Reporting | SAMA/EGY-FIN mapping + PDF/SARIF | ✅ Done — 19 CWE mappings, mapper with map_all()/coverage(), SARIF + PDF export |
+| Sprint 4 — HITL & Mobile | API pause gate + UI approval flow + Mobile Dashboard | ✅ Done — Mobile Dashboard, IPA/ATS scanners, HITL approval gate |
+| Sprint 5 — Enterprise & LATTICE | SIEM + Mesh + LATTICE Vector Bridge | ✅ Done — SIEM forwarding, Mesh coordination, Vector Intelligence indexing |
 
 ## Active Work
 - **Frontend dashboard** (`packages/cherenkov/web/`) — React 19 / Vite / Tailwind v4, live scan results, WebSocket events ✅
