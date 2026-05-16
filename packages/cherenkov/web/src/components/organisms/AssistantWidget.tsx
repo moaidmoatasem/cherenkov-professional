@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CyberButton } from '../atoms';
 import { MessageSquare, X, Send, Bot, User, Loader2 } from 'lucide-react';
@@ -118,7 +118,7 @@ export function AssistantWidget() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
