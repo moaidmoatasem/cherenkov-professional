@@ -1048,6 +1048,21 @@ async def get_results(workflow_name: str) -> dict:
     raise HTTPException(status_code=404, detail="No results found")
 
 
+@v1.get("/mesh/nodes")
+async def v1_mesh_nodes(current_user: AuthUser = Depends(get_current_user)) -> dict:
+    """List discovered mesh nodes."""
+    import socket
+
+    from cherenkov.core.mesh import MeshManager
+
+    # Note: In production, this would be a persistent singleton
+    manager = MeshManager(node_name=f"node-{socket.gethostname()}")
+    nodes = manager.discover_nodes(timeout=1.0)
+    manager.shutdown()
+
+    return {"nodes": nodes, "count": len(nodes)}
+
+
 # Register /api/v1 router
 app.include_router(v1)
 
