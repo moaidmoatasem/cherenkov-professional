@@ -45,11 +45,22 @@ from cherenkov.core.storage.database import (
     get_user,
     save_audit_entry,
 )
+from cherenkov.core.tokamak import Command, Tokamak
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
 from cherenkov.orchestration.workflow_parser import load_workflow
+from cherenkov.core.siem import SIEMForwarder
+from cherenkov.core.mesh import MeshManager
+from cherenkov.core.storage.lattice import LatticeBridge
+from cherenkov.threat_modeling import DFDGenerator, ThreatDragonExporter, TMBOMExporter, MermaidExporter
+from cherenkov.threat_modeling.schemas import ThreatModel, Diagram, DFDItem, DFDItemType, Threat, Severity, Control, ControlStatus, Risk
 
 logger = logging.getLogger(__name__)
+
+# Enterprise Integrations
+siem = SIEMForwarder({"enabled": True, "mode": "syslog", "host": "127.0.0.1", "port": 514})
+mesh = MeshManager()
+lattice = LatticeBridge()
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -63,6 +74,18 @@ async def lifespan(app: FastAPI):
             _broadcast({"type": "circuit_breaker", "state": "OPEN", "reason": "threshold_exceeded"})
         )
     )
+    meissner_hub.on_close(
+        lambda: asyncio.create_task(
+            _broadcast({"type": "circuit_breaker", "state": "CLOSED", "reason": "recovery_successful"})
+        )
+    )
+    meissner_hub.on_half_open(
+        lambda: asyncio.create_task(
+            _broadcast({"type": "circuit_breaker", "state": "HALF_OPEN", "reason": "testing_recovery"})
+        )
+    )
+    # Initialize LATTICE collection
+    asyncio.create_task(lattice.init_collection())
     yield
 
 
@@ -243,30 +266,48 @@ async def v1_ablation_stats() -> dict:
 
 
 @v1.post("/sandbox/execute")
-async def v1_sandbox_execute(request: SandboxExecuteRequest) -> dict:
-    """Execute a payload in the Tokamak sandbox."""
-    import asyncio
-
-    from cherenkov.core.tokamak import Command, Tokamak
-
-    cmd = Command(payload=request.payload, timeout=request.timeout)
-
-    # Run synchronously in an executor to avoid blocking the loop
-    result = await asyncio.to_thread(Tokamak.execute, cmd)
-
+async def v1_sandbox_execute(
+    command: Command, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
+) -> dict:
+    """Execute a payload in the TOKAMAK sandbox. Requires OPERATOR role."""
+    result = await asyncio.to_thread(Tokamak.execute, command)
     return {
+        "status": "success",
         "stdout": result.stdout,
         "stderr": result.stderr,
         "trace_hash": result.trace_hash,
         "shred_receipt": result.shred_receipt,
         "exit_code": result.exit_code,
+        "duration_ms": result.duration_ms,
     }
 
 
 @v1.get("/sandbox/status")
-async def v1_sandbox_status() -> dict:
-    """Return the status of the Tokamak sandbox."""
-    return {"status": "ready"}
+async def v1_sandbox_status(current_user: AuthUser = Depends(get_current_user)) -> dict:
+    """Return the status of the TOKAMAK sandbox."""
+    return {"status": "operational", "containers_active": 0}
+
+
+@v1.get("/mesh/nodes")
+async def v1_mesh_nodes(current_user: AuthUser = Depends(RoleChecker(Role.ADMIN))) -> list[dict]:
+    """Return list of active mesh nodes. Requires ADMIN."""
+    return mesh.get_active_nodes()
+
+
+@v1.post("/mesh/register")
+async def v1_mesh_register(node_id: str, host: str, role: str = "worker") -> dict:
+    """Register a new node in the mesh."""
+    mesh.register_node(node_id, host, role)
+    return {"status": "registered", "node_id": node_id}
+
+
+@v1.post("/mobile/scan")
+async def v1_mobile_scan(
+    request: ScanRequest, current_user: AuthUser = Depends(get_current_user)
+) -> dict:
+    """Specialized mobile binary analysis; triggers IPA/APK forensic scanners."""
+    # For now, we reuse _run_scan but could add mobile-specific logic here
+    return await _run_scan(request)
 
 
 @v1.post("/scan")
@@ -363,104 +404,101 @@ async def v1_scan_report_sarif(scan_id: str) -> dict:
 
 
 @v1.get("/reports/{scan_id}/pdf")
-async def v1_scan_report_pdf(scan_id: str) -> FileResponse:
-    from io import BytesIO
-
+async def v1_scan_report_pdf(
+    scan_id: str, current_user: AuthUser = Depends(get_current_user)
+):
+    """Download PDF security report."""
     from fastapi.responses import Response
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.units import inch
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     from cherenkov.compliance.mapper import ComplianceMapper
+    from cherenkov.compliance.reports import PDFReportGenerator
+    from cherenkov.core.base_scanner import Finding, ScanResult, Severity
     from cherenkov.core.storage.database import get_scan
 
     scan = get_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
 
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4)
-    styles = getSampleStyleSheet()
-    elements = []
+    # Map database scan dict to ScanResult model
+    findings = []
+    mapper = ComplianceMapper()
 
-    elements.append(Paragraph(f"CHERENKOV Audit Report — {scan_id}", styles["Title"]))
-    elements.append(Spacer(1, 0.2 * inch))
-    elements.append(Paragraph(f"<b>Target:</b> {scan.get('target', 'N/A')}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Status:</b> {scan.get('status', 'N/A')}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Started:</b> {scan.get('started_at', 'N/A')}", styles["Normal"]))
-    elements.append(
-        Paragraph(f"<b>Finished:</b> {scan.get('finished_at', 'N/A')}", styles["Normal"])
-    )
-    elements.append(
-        Paragraph(
-            "<b>Compliance Frameworks:</b> OWASP Top 10, SAMA CSF, EGY-FIN CSF, DORA",
-            styles["Normal"],
-        )
-    )
-    )
-    elements.append(Spacer(1, 0.3 * inch))
-
-    findings = scan.get("findings", [])
-    if findings:
-        elements.append(Paragraph(f"Findings ({len(findings)})", styles["Heading2"]))
-        elements.append(Spacer(1, 0.1 * inch))
-        table_data = [["Severity", "CWE", "Description", "OWASP", "SAMA", "EGY-FIN", "DORA"]]
-        for f in findings:
-            cwe = f.get("cwe", "")
-            sev = str(f.get("severity", "")).upper()
-            desc = f.get("description", "")[:60]
-            owasp = ", ".join(ComplianceMapper.map(cwe, "OWASP")) if cwe else ""
-            sama = ", ".join(ComplianceMapper.map(cwe, "SAMA_CSF")) if cwe else ""
-            egy = ", ".join(ComplianceMapper.map(cwe, "EGY_FIN_CSF")) if cwe else ""
-            dora = ", ".join(ComplianceMapper.map(cwe, "DORA")) if cwe else ""
-            table_data.append([sev, cwe, desc, owasp, sama, egy, dora])
-
-        col_widths = [
-            0.5 * inch,
-            0.6 * inch,
-            1.6 * inch,
-            0.9 * inch,
-            0.9 * inch,
-            0.9 * inch,
-            0.9 * inch,
-        ]
-        table = Table(table_data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a1a2e")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 8),
-                    ("FONTSIZE", (0, 1), (-1, -1), 7),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ]
+    for f in scan.get("findings", []):
+        findings.append(
+            Finding(
+                title=f.get("title", "Unknown"),
+                severity=Severity(str(f.get("severity", "INFO")).upper()),
+                description=f.get("description", ""),
+                cwe=f.get("cwe", ""),
+                remediation=f.get("remediation", ""),
             )
         )
-        elements.append(table)
-    else:
-        elements.append(Paragraph("No findings in this scan.", styles["Normal"]))
 
-    elements.append(Spacer(1, 0.3 * inch))
-    elements.append(
-        Paragraph(
-            "<i>Generated by CHERENKOV Security Platform — this report is a forensic artifact.</i>",
-            styles["Italic"],
-        )
+    result = ScanResult(
+        target=scan.get("target", ""),
+        scanner_name="Cherenkov Unified",
+        findings=findings,
+        status="completed",
     )
 
-    doc.build(elements)
-    pdf_bytes = buf.getvalue()
-    buf.close()
+    compliance_data = {}
+    for f in findings:
+        if f.cwe:
+            # Flatten the map_all result to list of framework names for simplicity in PDF
+            framework_dict = mapper.map_all(f.cwe)
+            compliance_data[f.cwe] = list(framework_dict.keys())
+
+    generator = PDFReportGenerator(result, compliance_data)
+    pdf_bytes = generator.generate()
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="cherenkov-report-{scan_id}.pdf"'},
+        headers={"Content-Disposition": f"attachment; filename=cherenkov_report_{scan_id}.pdf"},
     )
+
+
+@v1.get("/processes")
+async def v1_list_processes(category: Optional[str] = None) -> dict:
+    """List available business processes for security mapping."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    processes = ProcessMapper.list_processes(category)
+    categories = ProcessMapper.list_categories()
+    return {"processes": processes, "categories": categories, "count": len(processes)}
+
+
+@v1.get("/processes/{process_id}")
+async def v1_get_process(process_id: str) -> dict:
+    """Get a business process with steps and mapped security controls."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    process = ProcessMapper.get_process(process_id)
+    if not process:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return process
+
+
+@v1.get("/processes/{process_id}/controls")
+async def v1_get_process_controls(process_id: str, framework: Optional[str] = None) -> dict:
+    """Get security controls for a process, optionally filtered by compliance framework."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    result = ProcessMapper.get_process_controls(process_id, framework)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@v1.get("/processes/{process_id}/report")
+async def v1_get_process_report(process_id: str) -> dict:
+    """Generate a comprehensive risk report for a business process."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    report = ProcessMapper.generate_risk_report(process_id)
+    if "error" in report:
+        raise HTTPException(status_code=404, detail=report["error"])
+    return report
 
 
 @v1.get("/findings/pending")
@@ -675,6 +713,16 @@ async def _run_scan(request: "ScanRequest") -> dict:
                     )
                 )
 
+                # SIEM Forwarding
+                asyncio.create_task(siem.forward_finding(v, {"target": request.url, "scan_id": scan_id, "timestamp": finished}))
+
+                # LATTICE Embedding
+                asyncio.create_task(lattice.embed_and_store(
+                    finding_id=finding_id,
+                    content=f"{v['title']}: {v['description']}",
+                    metadata={"target": request.url, "scanner": v["scanner"], "severity": v["severity"]}
+                ))
+
     except Exception as exc:
         logger.error("Failed to persist scan %s: %s", scan_id, exc)
 
@@ -685,6 +733,186 @@ async def _run_scan(request: "ScanRequest") -> dict:
         "vulnerabilities": vulnerabilities,
         "count": len(vulnerabilities),
     }
+
+
+# ── Threat Modeling API ──────────────────────────────────────────────────────
+
+
+class ThreatModelGenerateRequest(BaseModel):
+    description: str
+    owner: str = "Security Team"
+    architecture_pattern: str = "web_app"
+
+
+@v1.post("/threat-model/generate")
+async def v1_threat_model_generate(
+    request: ThreatModelGenerateRequest,
+    current_user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Generate a complete threat model (DFD + STRIDE) from a system description.
+
+    Uses template-based generation with optional LLM enrichment via Ollama.
+    Returns the model summary and available export formats.
+    """
+    import json
+
+    from cherenkov.agents.local.ollama_client import OllamaClient
+
+    llm = OllamaClient() if OllamaClient().is_available() else None
+    generator = DFDGenerator(llm_client=llm)
+
+    model = generator.generate(
+        system_description=request.description,
+        architecture_pattern=request.architecture_pattern,
+        owner=request.owner,
+    )
+
+    model_id = str(uuid.uuid4())
+
+    td_exporter = ThreatDragonExporter(model)
+    td_json = td_exporter.export()
+
+    tmbom_exporter = TMBOMExporter(model)
+    tmbom_json = tmbom_exporter.export()
+
+    mermaid_exporter = MermaidExporter(model)
+    mermaid_dfd = mermaid_exporter.export_flowchart()
+
+    from cherenkov.core.storage.database import save_threat_model
+
+    save_threat_model(
+        model_id=model_id,
+        title=model.title,
+        owner=model.owner,
+        description=model.description,
+        version=model.version,
+        model_json=json.dumps({
+            "diagrams": [
+                {
+                    "title": d.title,
+                    "type": d.diagram_type,
+                    "item_count": len(d.items),
+                    "threat_count": len(d.threats),
+                }
+                for d in model.diagrams
+            ],
+            "control_count": len(model.controls),
+            "risk_count": len(model.risks),
+        }),
+        threat_dragon_json=json.dumps(td_json),
+        tmbom_json=json.dumps(tmbom_json),
+        mermaid_dfd=mermaid_dfd,
+    )
+
+    asyncio.create_task(
+        _broadcast({
+            "type": "threat_model_generated",
+            "model_id": model_id,
+            "title": model.title,
+            "threat_count": sum(len(d.threats) for d in model.diagrams),
+        })
+    )
+
+    return {
+        "model_id": model_id,
+        "title": model.title,
+        "description": model.description[:200],
+        "owner": model.owner,
+        "version": model.version,
+        "diagrams": [
+            {
+                "title": d.title,
+                "type": d.diagram_type,
+                "items": len(d.items),
+                "threats": len(d.threats),
+            }
+            for d in model.diagrams
+        ],
+        "controls": len(model.controls),
+        "risks": len(model.risks),
+        "exports": {
+            "threat_dragon": f"/api/v1/threat-model/{model_id}/export/threat-dragon",
+            "tmbom": f"/api/v1/threat-model/{model_id}/export/tmbom",
+            "mermaid": f"/api/v1/threat-model/{model_id}/export/dfd",
+        },
+    }
+
+
+@v1.get("/threat-model/{model_id}")
+async def v1_get_threat_model(
+    model_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Retrieve a stored threat model by ID."""
+    from cherenkov.core.storage.database import get_threat_model
+
+    tm = get_threat_model(model_id)
+    if not tm:
+        raise HTTPException(status_code=404, detail="Threat model not found")
+    return {
+        "model_id": tm["model_id"],
+        "title": tm["title"],
+        "owner": tm["owner"],
+        "description": tm["description"],
+        "version": tm["version"],
+        "created_at": tm["created_at"],
+        "summary": json.loads(tm["model_json"]),
+    }
+
+
+@v1.get("/threat-model/{model_id}/export/threat-dragon")
+async def v1_export_threat_dragon(
+    model_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Export threat model as OWASP Threat Dragon v2 JSON."""
+    from cherenkov.core.storage.database import get_threat_model
+
+    tm = get_threat_model(model_id)
+    if not tm:
+        raise HTTPException(status_code=404, detail="Threat model not found")
+    return json.loads(tm["threat_dragon_json"])
+
+
+@v1.get("/threat-model/{model_id}/export/tmbom")
+async def v1_export_tmbom(
+    model_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Export threat model as OWASP TM-BOM (CycloneDX ECMA-424 format)."""
+    from cherenkov.core.storage.database import get_threat_model
+
+    tm = get_threat_model(model_id)
+    if not tm:
+        raise HTTPException(status_code=404, detail="Threat model not found")
+    return json.loads(tm["tmbom_json"])
+
+
+@v1.get("/threat-model/{model_id}/export/dfd")
+async def v1_export_dfd(
+    model_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Export threat model DFD as a Mermaid.js flowchart."""
+    from cherenkov.core.storage.database import get_threat_model
+
+    tm = get_threat_model(model_id)
+    if not tm:
+        raise HTTPException(status_code=404, detail="Threat model not found")
+    return {
+        "format": "mermaid",
+        "diagram": tm["mermaid_dfd"],
+    }
+
+
+@v1.get("/threat-model/list")
+async def v1_list_threat_models(
+    current_user: AuthUser = Depends(get_current_user),
+) -> list[dict]:
+    """List all stored threat models."""
+    from cherenkov.core.storage.database import list_threat_models
+
+    return list_threat_models(20)
 
 
 # ── Legacy scan + health endpoints (keep for backwards compat) ───────────────

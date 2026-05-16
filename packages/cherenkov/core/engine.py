@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from typing import Callable, Dict, List, Optional
+from urllib.parse import urlparse
 
 from .base_scanner import ScanResult
 from .registry import ScannerRegistry
@@ -104,8 +105,6 @@ class ScanEngine:
                         else:
                             on_progress(scanner_name, res)
                     return res
-
-        from urllib.parse import urlparse
 
         tasks = [scan_with_semaphore(s) for s in scanners]
         results = await asyncio.gather(*tasks, return_exceptions=False)
