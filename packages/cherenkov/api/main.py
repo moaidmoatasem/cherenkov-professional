@@ -13,11 +13,13 @@ import os
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -33,13 +35,24 @@ logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
-# In-memory ring buffer of recent scan results (last 50).
-_scan_history: list[dict] = []
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from cherenkov.core.circuit_breaker import meissner_hub
+
+    meissner_hub.on_open(
+        lambda: asyncio.create_task(
+            _broadcast({"type": "circuit_breaker", "state": "OPEN", "reason": "threshold_exceeded"})
+        )
+    )
+    yield
+
 
 app = FastAPI(
     title="cherenkov Sovereign Security API",
     description="Scan API, workflow orchestration, and web dashboard. Flask retired.",
     version="1.1.0",
+    lifespan=lifespan,
 )
 
 # Include localhost:3000 (React dev server) alongside the API host origins
@@ -94,6 +107,15 @@ async def ws_live(websocket: WebSocket) -> None:
 v1 = APIRouter(prefix="/api/v1")
 
 
+async def _check_ollama() -> str:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get("http://localhost:11434/")
+            return "ready" if r.status_code == 200 else "offline"
+    except Exception:
+        return "offline"
+
+
 @v1.get("/health")
 async def v1_health() -> dict:
     """Health check used by useMetrics / useQueueDepth hooks.
@@ -101,16 +123,24 @@ async def v1_health() -> dict:
     Returns the node topology expected by NodeStatusRow and
     the Meissner shield state expected by ForensicHeader.
     """
-    active_scans = sum(1 for s in _scan_history[-5:] if s.get("_in_progress"))
+    from cherenkov.core.circuit_breaker import meissner_hub
+    from cherenkov.core.storage.database import list_scans
+
+    recent_scans = list_scans(limit=5)
+    active_scans = sum(1 for s in recent_scans if s.get("status") == "running")
+
+    ollama_status = await _check_ollama()
+    meissner_state = meissner_hub.state.value.upper()
+
     return {
         "status": "healthy",
         "agents": "operational",
         "queue": {"scan_jobs_pending": active_scans},
         "uptime": time.time(),
         "active_scans": active_scans,
-        "meissner": {"state": "CLOSED"},
+        "meissner": {"state": meissner_state},
         "nodes": {
-            "tensor": {"status": "ready", "model": "Llama 3.1 8B"},
+            "tensor": {"status": ollama_status, "model": "Llama 3.1 8B"},
             "kinetic": {"status": "ready", "model": "Qwen2.5 3B", "ram_gb": 8},
             "aegis": {"status": "ready", "model": "Llama 3.1 8B", "ram_gb": 8},
             "lattice": {"status": "ready", "model": "Qdrant / Vector", "vector_count": 0},
@@ -154,10 +184,6 @@ async def v1_ablation_stats() -> dict:
 async def v1_scan(request: "ScanRequest") -> dict:
     """Proxy to the core scan engine; broadcasts a live event on completion."""
     result = await _run_scan(request)
-    # Persist to in-memory ring buffer for /scans/history
-    _scan_history.append(result)
-    if len(_scan_history) > 50:
-        _scan_history.pop(0)
     await _broadcast(
         {
             "type": "scan_complete",
@@ -173,15 +199,16 @@ async def v1_scan(request: "ScanRequest") -> dict:
 @v1.get("/scans/history")
 async def v1_scan_history() -> list[dict]:
     """Return recent scan results for the ThreatIntelPanel sidebar."""
-    # Return newest first
-    return list(reversed(_scan_history[-20:]))
+    from cherenkov.core.storage.database import list_scans
+
+    return list_scans(20)
 
 
 @v1.get("/reports/{scan_id}/sarif")
 async def v1_scan_report_sarif(scan_id: str) -> dict:
     """Return a scan report in SARIF 2.1.0 format."""
-    from cherenkov.core.storage.database import get_scan
     from cherenkov.compliance.mapper import ComplianceMapper
+    from cherenkov.core.storage.database import get_scan
 
     scan = get_scan(scan_id)
     if not scan:
