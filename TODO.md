@@ -1,22 +1,24 @@
 # CHERENKOV TODO — Phase 2 Active Sprint
 
-## Sprint 3: TOKAMAK Execution Sandbox [IN PROGRESS]
-- [ ] Wire `core/tokamak.py` to `Dockerfile.tokamak` — pass sandbox a `Command` payload, return signed JSON receipt
-- [ ] Implement cryptographic erasure ("shred receipt") after sandbox teardown per CLAUDE.md invariant
-- [ ] Write `tests/unit/test_tokamak.py` — verify: payload reaches sandbox, output is SHA-256 signed, receipt is valid JSON
-- [ ] Add `GET /api/v1/sandbox/status` FastAPI endpoint so dashboard can poll TOKAMAK state
+## Sprint 3: TOKAMAK Execution Sandbox [DONE ✅]
+- [x] Wire `core/tokamak.py` to `Dockerfile.tokamak` — pass sandbox a `Command` payload, return signed JSON receipt
+- [x] Implement cryptographic erasure ("shred receipt") after sandbox teardown per CLAUDE.md invariant
+- [x] Write `tests/unit/test_tokamak.py` — verify: payload reaches sandbox, output is SHA-256 signed, receipt is valid JSON
+- [x] Add `GET /api/v1/sandbox/status` FastAPI endpoint so dashboard can poll TOKAMAK state
 
-## Sprint 4: HITL Workflows [NOT STARTED]
-- [ ] `POST /api/v1/findings/{id}/approve` — pause workflow, require operator signature before HIGH/CRITICAL PoC execution
-- [ ] `GET /api/v1/findings/pending` — list findings awaiting approval
+## Sprint 4: HITL Workflows [DONE ✅]
+- [x] `POST /api/v1/findings/{id}/approve` — pause workflow, require operator signature before HIGH/CRITICAL PoC execution
+- [x] `GET /api/v1/findings/pending` — list findings awaiting approval
+- [x] `POST /api/v1/findings/{id}/reject` — reject finding with operator audit
+- [x] Store pending state in SQLite (WAL mode) so restarts don't lose pending approvals
 - [ ] Frontend: `PendingApprovalsPanel` organism — badge count in `ForensicHeader`, full list in sidebar
-- [ ] Store pending state in SQLite (WAL mode) so restarts don't lose pending approvals
 
-## Sprint 5: Compliance & Reporting [NOT STARTED]
-- [ ] Build `packages/cherenkov/compliance/` mapper: CWE/CVE → SAMA CSF / EGY-FIN CSF / DORA / OWASP Top 10
-- [ ] `GET /api/v1/reports/{scan_id}/sarif` — export scan as SARIF 2.1 JSON
-- [ ] `GET /api/v1/reports/{scan_id}/pdf` — generate local PDF audit report (no cloud dependency)
-- [ ] Map compliance framework to `NewScanForm.tsx` `compliance` dropdown options
+## Sprint 5: Compliance & Reporting [DONE ✅]
+- [x] Build `packages/cherenkov/compliance/` mapper: CWE/CVE → SAMA CSF / EGY-FIN CSF / DORA / OWASP Top 10 (19 CWEs)
+- [x] `GET /api/v1/reports/{scan_id}/sarif` — export scan as SARIF 2.1 JSON
+- [x] `GET /api/v1/reports/{scan_id}/pdf` — generate local PDF audit report (reportlab, zero cloud)
+- [x] Map compliance framework to `NewScanForm.tsx` `compliance` dropdown options
+- [x] Unit tests — 14 tests covering all 4 frameworks, map_all(), coverage()
 
 ## Backend Hardening [ONGOING]
 - [ ] Move `_scan_history` from in-memory list to SQLite WAL vault (survives restart)
