@@ -379,7 +379,6 @@ async def v1_health() -> dict:
     Returns the node topology expected by NodeStatusRow and
     the Meissner shield state expected by ForensicHeader.
     """
-    from cherenkov.core.circuit_breaker import meissner_hub
 
     from cherenkov.core.storage.database import db_stats
 
