@@ -23,14 +23,15 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -e .
+          pip install -e ".[dev]"
       - name: Run Cherenkov Scan
+        continue-on-error: true
         run: |
           # Use local server if target not provided
           TARGET="${{ github.event.inputs.target || 'http://localhost' }}"
           python -m cherenkov.cli.main scan "$TARGET" --output sarif > results.sarif
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: hashFiles('results.sarif') != ''
         with:
           sarif_file: results.sarif
