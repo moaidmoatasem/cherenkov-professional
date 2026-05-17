@@ -67,8 +67,8 @@ def _write_pdf(chk_id: str, target: str, findings: list[dict], anchor: dict) -> 
                     remediation=f.get("remediation", ""),
                 )
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Skipping malformed finding during PDF build: %s", exc)
 
     result = ScanResult(target=target, scanner_name="cherenkov", findings=scan_findings)
     gen = PDFReportGenerator(result, compliance_data, chk_id=chk_id, anchor=anchor)

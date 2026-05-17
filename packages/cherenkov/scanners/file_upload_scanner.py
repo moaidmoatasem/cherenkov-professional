@@ -1,6 +1,10 @@
 """File Upload Scanner — detects unrestricted file upload endpoints."""
 
+import logging
+
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
+
+logger = logging.getLogger(__name__)
 
 
 class FileUploadScanner(BaseScanner):
@@ -14,7 +18,7 @@ class FileUploadScanner(BaseScanner):
             import httpx
 
             upload_paths = ["/upload", "/file/upload", "/api/upload", "/admin/upload"]
-            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+            async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
                 for path in upload_paths:
                     url = target.rstrip("/") + path
                     try:
@@ -32,8 +36,8 @@ class FileUploadScanner(BaseScanner):
                                     remediation="Enforce MIME-type allowlist server-side, randomise stored filenames, store outside webroot.",
                                 )
                             )
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except httpx.HTTPError as exc:
+                        logger.debug("Upload probe %s unreachable: %s", url, exc)
+        except ImportError as exc:
+            logger.warning("FileUploadScanner unavailable: %s", exc)
         return ScanResult(target=target, scanner_name=self.name, findings=findings)

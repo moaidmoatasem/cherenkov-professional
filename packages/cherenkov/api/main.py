@@ -26,9 +26,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
-from pydantic import BaseModel
 
 from cherenkov.api.middleware.auth import (
     Role,
