@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log(event_type);
+
+CREATE TABLE IF NOT EXISTS circuit_breaker_state (
+    key              TEXT    PRIMARY KEY,
+    state            TEXT    NOT NULL DEFAULT 'closed',
+    failure_count    INTEGER NOT NULL DEFAULT 0,
+    last_failure_time REAL,
+    updated_at       TEXT    NOT NULL
+);
 """
 
 
@@ -93,7 +101,8 @@ def save_scan(
             existing = conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
             if existing is not None:
                 logger.error(
-                    "WORM violation: attempted overwrite of immutable scan record scan_id=%s", scan_id
+                    "WORM violation: attempted overwrite of immutable scan record scan_id=%s",
+                    scan_id,
                 )
                 raise StorageError(
                     f"WORM violation: scan record '{scan_id}' already exists and cannot be overwritten."
@@ -137,6 +146,52 @@ def prune_old_scans(days: int = 90, path: Path = _DB_PATH) -> int:
         with conn:
             cur = conn.execute("DELETE FROM scans WHERE started_at < ?", (cutoff,))
             return cur.rowcount
+
+
+def erase_target_data(target: str, path: Path = _DB_PATH) -> dict:
+    """Right-to-erasure: remove all scan findings for a target URL.
+
+    Deletes the findings payload from scans and purges related audit_log
+    entries that reference the target. The scan_id row itself is retained
+    (status + timestamps only) so the forensic chain-of-custody is intact
+    but no personal data remains. Returns an erasure receipt.
+
+    Law 151/2020 Art. 15 compliance: call this when a data subject or the
+    bank's DPO requests erasure of data collected during a scan engagement.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    erased_scans = 0
+    erased_audit = 0
+
+    with closing(_connect(path)) as conn:
+        with conn:
+            # Null out findings payload; preserve scan_id + timestamps for audit chain
+            cur = conn.execute(
+                "UPDATE scans SET findings = '[]', meta = '{}', status = 'erased' "
+                "WHERE target = ? AND status != 'erased'",
+                (target,),
+            )
+            erased_scans = cur.rowcount
+
+            # Remove audit_log entries whose details reference this target
+            cur = conn.execute(
+                "DELETE FROM audit_log WHERE details LIKE ?",
+                (f'%"target": "{target}"%',),
+            )
+            erased_audit = cur.rowcount
+
+    receipt_payload = f"{now}|erase_target_data|{target}|scans={erased_scans}|audit={erased_audit}"
+    trace_hash = hashlib.sha256(receipt_payload.encode()).hexdigest()
+
+    return {
+        "target": target,
+        "erased_at": now,
+        "scans_cleared": erased_scans,
+        "audit_entries_removed": erased_audit,
+        "trace_hash": trace_hash,
+        "method": "findings_nulled+audit_purged",
+        "retained": "scan_id, started_at, finished_at, status=erased",
+    }
 
 
 def save_pending_finding(
@@ -235,6 +290,44 @@ def get_audit_log(limit: int = 100, path: Path = _DB_PATH) -> list[dict]:
         d["details"] = json.loads(d["details"])
         result.append(d)
     return result
+
+
+def save_cb_state(
+    key: str,
+    state: str,
+    failure_count: int,
+    last_failure_time: float | None,
+    path: Path = _DB_PATH,
+) -> None:
+    """Upsert circuit breaker state so it survives process restarts."""
+    now = datetime.now(timezone.utc).isoformat()
+    with closing(_connect(path)) as conn:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO circuit_breaker_state (key, state, failure_count, last_failure_time, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    state = excluded.state,
+                    failure_count = excluded.failure_count,
+                    last_failure_time = excluded.last_failure_time,
+                    updated_at = excluded.updated_at
+                """,
+                (key, state, failure_count, last_failure_time, now),
+            )
+
+
+def load_cb_state(key: str, path: Path = _DB_PATH) -> dict | None:
+    """Return persisted circuit breaker state dict or None if not found."""
+    try:
+        with closing(_connect(path)) as conn:
+            row = conn.execute(
+                "SELECT state, failure_count, last_failure_time FROM circuit_breaker_state WHERE key = ?",
+                (key,),
+            ).fetchone()
+        return dict(row) if row else None
+    except Exception:
+        return None
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:

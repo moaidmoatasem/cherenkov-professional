@@ -1,15 +1,36 @@
 """Async Scan Engine - Runs scanners concurrently"""
 
+from __future__ import annotations
+
 import asyncio
-import time
 import logging
+import time
 from typing import Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
-
 from .base_scanner import ScanResult
 from .registry import ScannerRegistry
+
+logger = logging.getLogger(__name__)
+
+
+async def _lattice_store(result: ScanResult) -> None:
+    try:
+        from cherenkov.ai.lattice import embed_and_store
+
+        await embed_and_store(result)
+    except Exception as exc:
+        logger.debug("LATTICE store skipped: %s", exc)
+
+
+async def _lattice_context(target: str) -> list[dict]:
+    try:
+        from cherenkov.ai.lattice import query_similar_targets
+
+        return await query_similar_targets(target, k=5)
+    except Exception as exc:
+        logger.debug("LATTICE context skipped: %s", exc)
+    return []
 
 
 class ScanEngine:
@@ -66,21 +87,29 @@ class ScanEngine:
         if scanners is None:
             scanners = self.registry.list_scanners()
 
+        # Seed TENSOR with similar past findings before scanning
+        lattice_context = await _lattice_context(target)
+        if lattice_context:
+            logger.info("LATTICE: seeding TENSOR with %d past findings", len(lattice_context))
+
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def scan_with_semaphore(scanner_name: str) -> ScanResult:
             async with semaphore:
                 # Target-level circuit breaker: if the target is failing consistently, stop scanning
-                from .circuit_breaker import default_registry, CircuitBreakerConfig
-                
+                from .circuit_breaker import CircuitBreakerConfig, default_registry
+
                 target_host = urlparse(target).netloc or "default"
                 breaker = default_registry.get_or_create(
-                    f"target:{target_host}", 
-                    CircuitBreakerConfig(failure_threshold=3, recovery_timeout=60)
+                    f"target:{target_host}",
+                    CircuitBreakerConfig(failure_threshold=3, recovery_timeout=60),
                 )
 
                 try:
-                    result = await breaker.execute_async(self.scan_single, scanner_name, target, timeout, raise_on_failure=True)
+                    result = await breaker.execute_async(
+                        self.scan_single, scanner_name, target, timeout, raise_on_failure=True
+                    )
+                    asyncio.ensure_future(_lattice_store(result))
                     if on_progress:
                         if asyncio.iscoroutinefunction(on_progress):
                             await on_progress(scanner_name, result)
@@ -89,13 +118,14 @@ class ScanEngine:
                     return result
                 except Exception as exc:
                     from .circuit_breaker import CircuitOpenError
+
                     if isinstance(exc, CircuitOpenError):
                         logger.warning("Circuit breaker blocked scan for %s: %s", target_host, exc)
                         status = "circuit_open"
                     else:
                         logger.error("Scanner %s failed for %s: %s", scanner_name, target_host, exc)
                         status = "failed"
-                    
+
                     res = ScanResult(
                         target=target,
                         scanner_name=scanner_name,
