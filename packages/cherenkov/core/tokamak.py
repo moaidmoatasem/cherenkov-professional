@@ -340,6 +340,10 @@ class Tokamak:
             "files_erased": shredded_files if shredded_files else ["payload.sh"],
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "method": "overwrite+truncate",
+            "trace_hash": trace_hash,
+            "attested_by": None,  # populated by operator at submission time
+            "license_number": None,  # licensed security professional ref (CBE requirement)
+            "standard": "ISO 27001 Annex A.8.3",
         }
 
         return TokamakResult(

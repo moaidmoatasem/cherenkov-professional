@@ -43,6 +43,7 @@ from cherenkov.api.middleware.auth import (
 )
 from cherenkov.core.storage.database import (
     _DB_PATH,
+    erase_target_data,
     get_audit_log,
     get_user,
     save_audit_entry,
@@ -271,8 +272,41 @@ async def v1_auth_me(current_user: AuthUser = Depends(get_current_user)) -> dict
 @v1.get("/audit")
 async def v1_audit_log(current_user: AuthUser = Depends(RoleChecker(Role.ADMIN))) -> list[dict]:
     """Return the CHERENKOV audit log. Requires ADMIN role."""
-
     return get_audit_log(100)
+
+
+class EraseTargetRequest(BaseModel):
+    target: str
+    attested_by: str  # name of the operator authorizing erasure
+    reason: str = "data_subject_request"
+
+
+@v1.delete("/data/target")
+async def v1_erase_target(
+    request: EraseTargetRequest,
+    current_user: AuthUser = Depends(RoleChecker(Role.ADMIN)),
+) -> dict:
+    """Right-to-erasure endpoint (Law 151/2020 Art. 15).
+
+    Nulls all finding payloads for the given target URL and purges
+    related audit entries. Returns a signed erasure receipt.
+    Requires ADMIN role.
+    """
+    receipt = await asyncio.to_thread(erase_target_data, request.target)
+    receipt["attested_by"] = request.attested_by
+    receipt["reason"] = request.reason
+
+    save_audit_entry(
+        event_type="DATA_ERASURE",
+        user_id=current_user.username,
+        details={
+            "target": request.target,
+            "attested_by": request.attested_by,
+            "reason": request.reason,
+            "trace_hash": receipt["trace_hash"],
+        },
+    )
+    return receipt
 
 
 async def _check_ollama() -> str:
