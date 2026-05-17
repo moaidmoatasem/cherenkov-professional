@@ -44,6 +44,7 @@ from cherenkov.core.storage.database import (
     get_user,
     save_audit_entry,
 )
+from cherenkov.core.tokamak import Command, Tokamak
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
 from cherenkov.orchestration.workflow_parser import load_workflow
@@ -393,6 +394,7 @@ async def v1_scan_history() -> list[dict]:
 
     return list_scans(20)
 
+
 @v1.get("/reports/{scan_id}/sarif")
 async def v1_scan_report_sarif(scan_id: str) -> dict:
     """Return a scan report in SARIF 2.1.0 format."""
@@ -453,9 +455,7 @@ async def v1_scan_report_sarif(scan_id: str) -> dict:
 
 
 @v1.get("/reports/{scan_id}/pdf")
-async def v1_scan_report_pdf(
-    scan_id: str, current_user: AuthUser = Depends(get_current_user)
-):
+async def v1_scan_report_pdf(scan_id: str, current_user: AuthUser = Depends(get_current_user)):
     """Download PDF security report."""
     from fastapi.responses import Response
 
@@ -610,7 +610,6 @@ async def v1_reject_finding(
         raise HTTPException(status_code=500, detail=f"Failed to reject finding: {exc}") from exc
 
 
-
 # Serve the static dashboard assets
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -636,44 +635,6 @@ class FindingApproval(BaseModel):
 class WorkflowExecuteRequest(BaseModel):
     workflow_name: str
     config: Optional[Dict[str, Any]] = None
-
-
-class AssistantAdviceRequest(BaseModel):
-    findings: List[dict]
-    context: Optional[dict] = None
-
-
-@v1.post("/assistant/advice")
-async def v1_assistant_advice(
-    request: AssistantAdviceRequest, current_user: AuthUser = Depends(get_current_user)
-) -> dict:
-    """Get remediation advice from the AI Studio Assistant (Ollama)."""
-    import json
-
-    import httpx
-
-    prompt = f"As a security expert, provide concise remediation advice for the following findings:\n{json.dumps(request.findings)}"
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            ollama_status = await _check_ollama()
-            if ollama_status != "ready":
-                return {
-                    "advice": "AI Studio Assistant is offline (Ollama not detected). Manual remediation recommended.",
-                    "status": "offline",
-                }
-
-            r = await client.post(
-                "http://localhost:11434/api/generate",
-                json={"model": "mistral", "prompt": prompt, "stream": False},
-            )
-            if r.status_code == 200:
-                data = r.json()
-                return {"advice": data.get("response", ""), "status": "ready"}
-            else:
-                return {"advice": "Failed to get advice from Ollama.", "status": "error"}
-    except Exception as exc:
-        return {"advice": f"Assistant error: {exc}", "status": "error"}
 
 
 class WorkflowResponse(BaseModel):
