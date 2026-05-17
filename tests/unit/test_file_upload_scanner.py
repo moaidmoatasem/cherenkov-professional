@@ -28,6 +28,7 @@ async def test_file_upload_positive():
     assert "Unrestricted File Upload" in result.findings[0].title
 
 
+
 @pytest.mark.asyncio
 async def test_file_upload_negative():
     scanner = FileUploadScanner()
