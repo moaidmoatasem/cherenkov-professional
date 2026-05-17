@@ -27,6 +27,9 @@ agent_state/
 workflow_checkpoints/
 workflow_results/
 
+# Qdrant runtime data (local vector DB state — not config)
+qdrant/
+
 # MkDocs build output
 site/
 
