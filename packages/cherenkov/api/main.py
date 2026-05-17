@@ -341,17 +341,10 @@ async def v1_ablation_stats() -> dict:
 
 @v1.post("/sandbox/execute")
 async def v1_sandbox_execute(
-    request: SandboxExecuteRequest, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
+    command: Command, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
 ) -> dict:
     """Execute a payload in the TOKAMAK sandbox. Requires OPERATOR role."""
-    import asyncio
-
-    from cherenkov.core.tokamak import Command, Tokamak
-
-    cmd = Command(payload=request.payload, timeout=request.timeout)
-
-    # Run synchronously in an executor to avoid blocking the loop
-    result = await asyncio.to_thread(Tokamak.execute, cmd)
+    result = await asyncio.to_thread(Tokamak.execute, command)
     return {
         "stdout": result.stdout,
         "stderr": result.stderr,
@@ -399,7 +392,6 @@ async def v1_scan_history() -> list[dict]:
     from cherenkov.core.storage.database import list_scans
 
     return list_scans(20)
-
 
 @v1.get("/reports/{scan_id}/sarif")
 async def v1_scan_report_sarif(scan_id: str) -> dict:
@@ -461,7 +453,9 @@ async def v1_scan_report_sarif(scan_id: str) -> dict:
 
 
 @v1.get("/reports/{scan_id}/pdf")
-async def v1_scan_report_pdf(scan_id: str, current_user: AuthUser = Depends(get_current_user)):
+async def v1_scan_report_pdf(
+    scan_id: str, current_user: AuthUser = Depends(get_current_user)
+):
     """Download PDF security report."""
     from fastapi.responses import Response
 
@@ -614,6 +608,7 @@ async def v1_reject_finding(
         return {"status": "success", "finding_id": finding_id, "new_status": "rejected"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to reject finding: {exc}") from exc
+
 
 
 # Serve the static dashboard assets
