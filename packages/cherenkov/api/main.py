@@ -633,7 +633,12 @@ async def v1_approve_finding(
 async def v1_reject_finding(
     finding_id: str, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
 ) -> dict:
-    """Reject a finding. Requires OPERATOR role or higher."""
+    """Reject a finding (marks it as false positive). Requires OPERATOR role or higher.
+
+    Side-effect: labels the finding in LATTICE so future scans de-rank it
+    automatically via cosine similarity scoring.
+    """
+    from cherenkov.core.lattice_bridge import label_false_positive
     from cherenkov.core.storage.database import init_db, update_finding_status
 
     try:
@@ -646,6 +651,9 @@ async def v1_reject_finding(
             user_id=current_user.username,
             details={"finding_id": finding_id},
         )
+
+        # Mark as false positive in LATTICE — non-blocking
+        asyncio.create_task(asyncio.to_thread(label_false_positive, finding_id))
 
         return {"status": "success", "finding_id": finding_id, "new_status": "rejected"}
     except Exception as exc:
@@ -782,11 +790,28 @@ async def _run_scan(request: "ScanRequest") -> dict:
             finished_at=finished,
         )
 
+        from cherenkov.core.lattice_bridge import embed_and_store
         from cherenkov.core.storage.database import save_pending_finding
 
         for v in vulnerabilities:
+            finding_id = str(uuid.uuid4())
+
+            # Index every finding in LATTICE for similarity recall and FP learning.
+            # Run in a background thread — Qdrant unavailability must not block scan response.
+            asyncio.create_task(
+                asyncio.to_thread(
+                    embed_and_store,
+                    finding_id,
+                    v["title"],
+                    v.get("description", ""),
+                    request.url,
+                    v["scanner"],
+                    v["severity"],
+                    v.get("cwe", ""),
+                )
+            )
+
             if v["severity"] in ("CRITICAL", "HIGH"):
-                finding_id = str(uuid.uuid4())
                 save_pending_finding(
                     finding_id=finding_id,
                     severity=v["severity"],
@@ -794,9 +819,6 @@ async def _run_scan(request: "ScanRequest") -> dict:
                     title=v["title"],
                     scan_id=scan_id,
                 )
-
-                # We need to await the broadcast event, but broadcast relies on asyncio loop running.
-                # Since _run_scan is async, we can await it directly.
                 asyncio.create_task(
                     _broadcast(
                         {
@@ -895,6 +917,63 @@ async def get_results(workflow_name: str) -> dict:
     if result:
         return result
     raise HTTPException(status_code=404, detail="No results found")
+
+
+class LatticeQueryRequest(BaseModel):
+    title: str
+    description: str = ""
+    top_k: int = 5
+    exclude_false_positives: bool = True
+
+
+@v1.post("/lattice/similar")
+async def v1_lattice_similar(
+    request: LatticeQueryRequest,
+    current_user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """
+    Query LATTICE for past findings similar to the supplied title + description.
+
+    Used by the dashboard and autonomous agents to surface precedent before
+    escalating a new finding.  Excludes false-positives by default.
+    """
+    from cherenkov.core.lattice_bridge import query_similar_targets
+
+    results = await asyncio.to_thread(
+        query_similar_targets,
+        request.title,
+        request.description,
+        request.top_k,
+        request.exclude_false_positives,
+    )
+
+    return {
+        "results": [
+            {
+                "id": r.id,
+                "score": round(r.score, 4),
+                "title": r.title,
+                "target": r.target,
+                "scanner": r.scanner,
+                "is_false_positive": r.is_false_positive,
+            }
+            for r in results
+        ],
+        "count": len(results),
+    }
+
+
+@v1.get("/lattice/stats")
+async def v1_lattice_stats(current_user: AuthUser = Depends(get_current_user)) -> dict:
+    """Return LATTICE vector store statistics."""
+    from cherenkov.core.lattice_bridge import vector_count
+
+    count = await asyncio.to_thread(vector_count)
+    return {
+        "vector_count": count,
+        "collection": "cherenkov_findings",
+        "status": "ready" if count >= 0 else "offline",
+    }
 
 
 @v1.get("/mesh/nodes")

@@ -151,13 +151,15 @@ class ScanTOKAMAK:
         timeout: int = 120,
     ) -> AsyncGenerator:
         """
-        Context manager: create tokamak, yield, destroy on exit.
+        Context manager: spin up an ephemeral tokamak, yield it, destroy on exit.
+
+        The container is kept alive with `sleep infinity` so callers can inject
+        payloads via exec_run() without a race against the default entrypoint.
 
         Example:
             async with tokamak.scan_context("https://target.com") as container:
-                result = await asyncio.wait_for(
-                    container.exec_run("cherenkov scan ..."),
-                    timeout=timeout
+                exit_code, output = await asyncio.to_thread(
+                    container.exec_run, ["sh", "-c", "nmap -sV $TARGET"]
                 )
         """
         container = None
@@ -170,7 +172,9 @@ class ScanTOKAMAK:
             container = await asyncio.to_thread(
                 self.client.containers.run,
                 image=cfg["image"],
+                command=["sh", "-c", "sleep infinity"],  # keepalive — payload injected via exec_run
                 detach=True,
+                labels={"cherenkov.role": "tokamak", "cherenkov.target": target_url[:128]},
                 environment={
                     "cherenkov_TARGET": target_url,
                     "cherenkov_TIMEOUT": str(timeout),
@@ -204,26 +208,49 @@ class ScanTOKAMAK:
         profile: TOKAMAKProfile = TOKAMAKProfile.STANDARD,
     ) -> dict:
         """
-        Execute a PoC in an ephemeral tokamak.
-        Returns dict with 'exploitable' bool and 'evidence' str.
+        Execute a PoC payload in an ephemeral tokamak container.
+
+        The payload is injected via exec_run() into a running container kept
+        alive by `sleep infinity`.  Output is expected to be JSON with keys:
+          - exploitable: bool
+          - evidence: str (e.g. HTTP response snippet, error message)
+
+        Returns a dict with 'exploitable' bool and 'evidence' str.
         """
         async with self.scan_context(
             target, profile=profile, timeout=self.POC_TIMEOUT
         ) as container:
-            exit_code = await asyncio.wait_for(
-                asyncio.to_thread(container.wait, timeout=self.POC_TIMEOUT),
-                timeout=self.POC_TIMEOUT + 5,
-            )
-            logs = await asyncio.to_thread(container.logs)
-            output = logs.decode("utf-8", errors="replace")
-
             try:
-                result = json.loads(output)
-                return result
-            except json.JSONDecodeError:
+                exec_result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        container.exec_run,
+                        ["sh", "-c", payload],
+                        stdout=True,
+                        stderr=True,
+                        demux=False,
+                    ),
+                    timeout=self.POC_TIMEOUT,
+                )
+                exit_code = exec_result.exit_code
+                raw_output = exec_result.output or b""
+                output = raw_output.decode("utf-8", errors="replace").strip()
+
+                try:
+                    result = json.loads(output)
+                    if "exploitable" not in result:
+                        result["exploitable"] = exit_code == 0
+                    return result
+                except json.JSONDecodeError:
+                    return {
+                        "exploitable": exit_code == 0,
+                        "evidence": output or f"No output (exit {exit_code})",
+                    }
+
+            except asyncio.TimeoutError:
+                logger.warning("TOKAMAK PoC timed out after %ss — %s", self.POC_TIMEOUT, technique)
                 return {
                     "exploitable": False,
-                    "evidence": f"Non-JSON output (exit {exit_code.get('StatusCode')})",
+                    "evidence": f"PoC timed out after {self.POC_TIMEOUT}s",
                 }
 
     async def kill_active(self) -> None:
