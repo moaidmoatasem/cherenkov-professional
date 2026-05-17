@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -11,11 +11,21 @@ async def test_xxe_scanner_positive():
     scanner = XXEScanner()
     target = "http://example.com/api"
 
-    with patch(
-        "httpx.AsyncClient.post",
-        new_callable=AsyncMock,
-        return_value=MagicMock(status_code=200, text="root:x:0:0:root:/root:/bin/bash"),
-    ):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "root:x:0:0:root:/root:/bin/bash"
+
+    class MockClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            return mock_response
+
+    with patch("httpx.AsyncClient", return_value=MockClient()):
         result = await scanner.scan(target)
 
     assert result.target == target
@@ -29,11 +39,21 @@ async def test_xxe_scanner_negative():
     scanner = XXEScanner()
     target = "http://example.com/api"
 
-    with patch(
-        "httpx.AsyncClient.post",
-        new_callable=AsyncMock,
-        return_value=MagicMock(status_code=200, text="OK"),
-    ):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "OK"
+
+    class MockClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            return mock_response
+
+    with patch("httpx.AsyncClient", return_value=MockClient()):
         result = await scanner.scan(target)
 
     assert len(result.findings) == 0
@@ -44,7 +64,7 @@ async def test_xxe_scanner_timeout():
     scanner = XXEScanner()
     target = "http://example.com/api"
 
-    with patch("httpx.AsyncClient.post", side_effect=httpx.TimeoutException("Timeout")):
+    with patch("httpx.AsyncClient", side_effect=httpx.TimeoutException("Timeout")):
         result = await scanner.scan(target)
 
     assert len(result.findings) == 0
