@@ -17,7 +17,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Set
+from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
@@ -136,6 +136,103 @@ class AuthRequest(BaseModel):
     password: str
 
 
+class FridaGenerateRequest(BaseModel):
+    platform: str
+    hooks: List[str]
+
+
+class AssistantAdviceRequest(BaseModel):
+    findings: List[dict]
+    context: Optional[dict] = None
+
+
+@v1.post("/mobile/frida/generate")
+async def v1_frida_generate(
+    request: FridaGenerateRequest, current_user: AuthUser = Depends(get_current_user)
+) -> dict:
+    """Generate Frida scripts for mobile runtime analysis."""
+
+    script = f"/* CHERENKOV FRIDA GENERATOR // PLATFORM: {request.platform.upper()} */\n\n"
+
+    if request.platform == "android":
+        if "ssl_pinning" in request.hooks:
+            script += """
+// Android SSL Pinning Bypass (Generic)
+Java.perform(function() {
+    var array_list = Java.use("java.util.ArrayList");
+    var ApiClient = Java.use("com.android.org.conscrypt.TrustManagerImpl");
+
+    ApiClient.checkServerTrusted.implementation = function(chain, authType) {
+        return array_list.$new();
+    };
+});
+"""
+        if "root_detection" in request.hooks:
+            script += """
+// Android Root Detection Bypass
+Java.perform(function() {
+    var RootPackages = ["com.noshufou.android.su", "com.thirdparty.superuser", "eu.chainfire.supersu"];
+    var File = Java.use("java.io.File");
+
+    File.exists.implementation = function() {
+        var name = this.getName();
+        if (RootPackages.indexOf(name) > -1) {
+            return false;
+        }
+        return this.exists();
+    };
+});
+"""
+    elif request.platform == "ios":
+        if "ssl_pinning" in request.hooks:
+            script += """
+// iOS SSL Pinning Bypass
+if (ObjC.available) {
+    for (var className in ObjC.classes) {
+        if (className.indexOf("TrustManager") !== -1) {
+            // Mocking bypass logic
+        }
+    }
+}
+"""
+
+    return {"script": script, "platform": request.platform}
+
+
+@v1.post("/assistant/advice")
+async def v1_assistant_advice(
+    request: AssistantAdviceRequest, current_user: AuthUser = Depends(get_current_user)
+) -> dict:
+    """Get remediation advice from the AI Studio Assistant (Ollama)."""
+    import json
+
+    import httpx
+
+    prompt = f"As a security expert, provide concise remediation advice for the following findings:\n{json.dumps(request.findings)}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Note: _check_ollama must be defined or imported
+            ollama_status = await _check_ollama()
+            if ollama_status != "ready":
+                return {
+                    "advice": "AI Studio Assistant is offline (Ollama not detected). Manual remediation recommended.",
+                    "status": "offline",
+                }
+
+            r = await client.post(
+                "http://localhost:11434/api/generate",
+                json={"model": "mistral", "prompt": prompt, "stream": False},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                return {"advice": data.get("response", ""), "status": "ready"}
+            else:
+                return {"advice": "Failed to get advice from Ollama.", "status": "error"}
+    except Exception as exc:
+        return {"advice": f"Assistant error: {exc}", "status": "error"}
+
+
 @v1.post("/auth/token")
 async def v1_auth_token(request: AuthRequest) -> dict:
     """Authenticate a user and return a JWT token."""
@@ -159,6 +256,7 @@ async def v1_auth_me(current_user: AuthUser = Depends(get_current_user)) -> dict
 @v1.get("/audit")
 async def v1_audit_log(current_user: AuthUser = Depends(RoleChecker(Role.ADMIN))) -> list[dict]:
     """Return the CHERENKOV audit log. Requires ADMIN role."""
+
     return get_audit_log(100)
 
 
@@ -242,8 +340,10 @@ async def v1_ablation_stats() -> dict:
 
 
 @v1.post("/sandbox/execute")
-async def v1_sandbox_execute(request: SandboxExecuteRequest) -> dict:
-    """Execute a payload in the Tokamak sandbox."""
+async def v1_sandbox_execute(
+    request: SandboxExecuteRequest, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
+) -> dict:
+    """Execute a payload in the TOKAMAK sandbox. Requires OPERATOR role."""
     import asyncio
 
     from cherenkov.core.tokamak import Command, Tokamak
@@ -252,7 +352,6 @@ async def v1_sandbox_execute(request: SandboxExecuteRequest) -> dict:
 
     # Run synchronously in an executor to avoid blocking the loop
     result = await asyncio.to_thread(Tokamak.execute, cmd)
-
     return {
         "stdout": result.stdout,
         "stderr": result.stderr,
@@ -361,6 +460,102 @@ async def v1_scan_report_sarif(scan_id: str) -> dict:
     }
 
 
+@v1.get("/reports/{scan_id}/pdf")
+async def v1_scan_report_pdf(scan_id: str, current_user: AuthUser = Depends(get_current_user)):
+    """Download PDF security report."""
+    from fastapi.responses import Response
+
+    from cherenkov.compliance.mapper import ComplianceMapper
+    from cherenkov.compliance.reports import PDFReportGenerator
+    from cherenkov.core.base_scanner import Finding, ScanResult, Severity
+    from cherenkov.core.storage.database import get_scan
+
+    scan = get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    # Map database scan dict to ScanResult model
+    findings = []
+    mapper = ComplianceMapper()
+
+    for f in scan.get("findings", []):
+        findings.append(
+            Finding(
+                title=f.get("title", "Unknown"),
+                severity=Severity(str(f.get("severity", "INFO")).upper()),
+                description=f.get("description", ""),
+                cwe=f.get("cwe", ""),
+                remediation=f.get("remediation", ""),
+            )
+        )
+
+    result = ScanResult(
+        target=scan.get("target", ""),
+        scanner_name="Cherenkov Unified",
+        findings=findings,
+        status="completed",
+    )
+
+    compliance_data = {}
+    for f in findings:
+        if f.cwe:
+            # Flatten the map_all result to list of framework names for simplicity in PDF
+            framework_dict = mapper.map_all(f.cwe)
+            compliance_data[f.cwe] = list(framework_dict.keys())
+
+    generator = PDFReportGenerator(result, compliance_data)
+    pdf_bytes = generator.generate()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=cherenkov_report_{scan_id}.pdf"},
+    )
+
+
+@v1.get("/processes")
+async def v1_list_processes(category: Optional[str] = None) -> dict:
+    """List available business processes for security mapping."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    processes = ProcessMapper.list_processes(category)
+    categories = ProcessMapper.list_categories()
+    return {"processes": processes, "categories": categories, "count": len(processes)}
+
+
+@v1.get("/processes/{process_id}")
+async def v1_get_process(process_id: str) -> dict:
+    """Get a business process with steps and mapped security controls."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    process = ProcessMapper.get_process(process_id)
+    if not process:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return process
+
+
+@v1.get("/processes/{process_id}/controls")
+async def v1_get_process_controls(process_id: str, framework: Optional[str] = None) -> dict:
+    """Get security controls for a process, optionally filtered by compliance framework."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    result = ProcessMapper.get_process_controls(process_id, framework)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@v1.get("/processes/{process_id}/report")
+async def v1_get_process_report(process_id: str) -> dict:
+    """Generate a comprehensive risk report for a business process."""
+    from cherenkov.compliance.process_mapper import ProcessMapper
+
+    report = ProcessMapper.generate_risk_report(process_id)
+    if "error" in report:
+        raise HTTPException(status_code=404, detail=report["error"])
+    return report
+
+
 @v1.get("/findings/pending")
 async def v1_get_pending_findings() -> list[dict]:
     """Return a list of all pending findings."""
@@ -448,6 +643,44 @@ class WorkflowExecuteRequest(BaseModel):
     config: Optional[Dict[str, Any]] = None
 
 
+class AssistantAdviceRequest(BaseModel):
+    findings: List[dict]
+    context: Optional[dict] = None
+
+
+@v1.post("/assistant/advice")
+async def v1_assistant_advice(
+    request: AssistantAdviceRequest, current_user: AuthUser = Depends(get_current_user)
+) -> dict:
+    """Get remediation advice from the AI Studio Assistant (Ollama)."""
+    import json
+
+    import httpx
+
+    prompt = f"As a security expert, provide concise remediation advice for the following findings:\n{json.dumps(request.findings)}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            ollama_status = await _check_ollama()
+            if ollama_status != "ready":
+                return {
+                    "advice": "AI Studio Assistant is offline (Ollama not detected). Manual remediation recommended.",
+                    "status": "offline",
+                }
+
+            r = await client.post(
+                "http://localhost:11434/api/generate",
+                json={"model": "mistral", "prompt": prompt, "stream": False},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                return {"advice": data.get("response", ""), "status": "ready"}
+            else:
+                return {"advice": "Failed to get advice from Ollama.", "status": "error"}
+    except Exception as exc:
+        return {"advice": f"Assistant error: {exc}", "status": "error"}
+
+
 class WorkflowResponse(BaseModel):
     success: bool
     workflow: str
@@ -468,6 +701,17 @@ async def dashboard() -> FileResponse:
 
 
 # ── Shared scan implementation ────────────────────────────────────────────────
+
+
+async def _forward_to_siem(vulnerabilities: list[dict], target: str):
+    """Background task to forward findings to local SIEM."""
+    from cherenkov.core.siem import SIEMForwarder
+
+    for v in vulnerabilities:
+        finding = {**v, "target": target}
+        # Default local syslog forward (UDP 514)
+        SIEMForwarder.send_syslog(finding)
+        logger.debug("Forwarded finding to local SIEM: %s", v["title"])
 
 
 async def _run_scan(request: "ScanRequest") -> dict:
@@ -568,6 +812,9 @@ async def _run_scan(request: "ScanRequest") -> dict:
     except Exception as exc:
         logger.error("Failed to persist scan %s: %s", scan_id, exc)
 
+    # Trigger SIEM forwarding
+    asyncio.create_task(_forward_to_siem(vulnerabilities, request.url))
+
     return {
         "scan_id": scan_id,
         "target": request.url,
@@ -649,6 +896,21 @@ async def get_results(workflow_name: str) -> dict:
     if result:
         return result
     raise HTTPException(status_code=404, detail="No results found")
+
+
+@v1.get("/mesh/nodes")
+async def v1_mesh_nodes(current_user: AuthUser = Depends(get_current_user)) -> dict:
+    """List discovered mesh nodes."""
+    import socket
+
+    from cherenkov.core.mesh import MeshManager
+
+    # Note: In production, this would be a persistent singleton
+    manager = MeshManager(node_name=f"node-{socket.gethostname()}")
+    nodes = manager.discover_nodes(timeout=1.0)
+    manager.shutdown()
+
+    return {"nodes": nodes, "count": len(nodes)}
 
 
 # Register /api/v1 router
