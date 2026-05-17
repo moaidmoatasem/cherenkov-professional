@@ -23,9 +23,11 @@ class ScannerRegistry:
         from cherenkov.scanners.path_traversal_scanner import PathTraversalScanner
         from cherenkov.scanners.sql_injection_scanner import SQLInjectionScanner
         from cherenkov.scanners.ssrf_scanner import SSRFScanner
+        from cherenkov.scanners.xss_scanner import XSSScanner
         from cherenkov.scanners.xxe_scanner import XXEScanner
 
         self.register(XXEScanner)
+        self.register(XSSScanner)
         self.register(PathTraversalScanner)
         self.register(FileUploadScanner)
         self.register(SQLInjectionScanner)
