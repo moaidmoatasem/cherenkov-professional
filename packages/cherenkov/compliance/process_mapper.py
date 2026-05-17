@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from cherenkov.compliance.mapper import FRAMEWORKS, ComplianceMapper
+from cherenkov.compliance.mapper import ComplianceMapper
+
+___FRAMEWORKS = ["OWASP", "SAMA_CSF", "EGY_FIN_CSF", "DORA"]
 
 
 @dataclass
@@ -410,7 +412,7 @@ class ProcessMapper:
 
         total_steps = len(proc.steps)
         risk_scores: list[int] = []
-        cwe_coverage: dict[str, int] = {fw: 0 for fw in FRAMEWORKS}
+        cwe_coverage: dict[str, int] = {fw: 0 for fw in ["OWASP", "SAMA_CSF", "EGY_FIN_CSF", "DORA"]}
         critical_steps: list[str] = []
         high_steps: list[str] = []
 
@@ -425,7 +427,7 @@ class ProcessMapper:
 
             for cwe_id in step.cwe_ids:
                 all_cwes.add(cwe_id)
-                for fw in FRAMEWORKS:
+                for fw in ["OWASP", "SAMA_CSF", "EGY_FIN_CSF", "DORA"]:
                     if ComplianceMapper.map(cwe_id, fw):
                         cwe_coverage[fw] += 1
 
@@ -433,7 +435,7 @@ class ProcessMapper:
         max_risk = max(risk_scores) if risk_scores else 0
 
         compliance_coverage = {}
-        for fw in FRAMEWORKS:
+        for fw in ["OWASP", "SAMA_CSF", "EGY_FIN_CSF", "DORA"]:
             total_possible = total_steps * len(all_cwes)
             coverage_pct = (cwe_coverage[fw] / total_possible * 100) if total_possible > 0 else 0
             compliance_coverage[fw] = {
