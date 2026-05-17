@@ -292,6 +292,32 @@ def _get_active_scans_count() -> int:
         return 0
 
 
+async def _get_qdrant_vector_count() -> int:
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as c:
+            r = await c.get("http://localhost:6333/collections/cherenkov_findings")
+            if r.status_code == 200:
+                return r.json().get("result", {}).get("vectors_count", 0) or 0
+    except Exception:
+        pass
+    return 0
+
+
+def _get_tokamak_container_count() -> int:
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "label=cherenkov.tokamak=true", "--format", "{{.ID}}"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        return len([ln for ln in result.stdout.strip().splitlines() if ln])
+    except Exception:
+        return 0
+
+
 @v1.get("/health")
 async def v1_health() -> dict:
     """Health check used by useMetrics / useQueueDepth hooks.
@@ -302,23 +328,34 @@ async def v1_health() -> dict:
     from cherenkov.core.circuit_breaker import meissner_hub
 
     active_scans = _get_active_scans_count()
-
-    ollama_status = await _check_ollama()
+    ollama_status, vector_count, container_count = await asyncio.gather(
+        _check_ollama(),
+        _get_qdrant_vector_count(),
+        asyncio.to_thread(_get_tokamak_container_count),
+    )
     meissner_state = meissner_hub.state.value.upper()
 
     return {
         "status": "healthy",
         "agents": "operational",
         "queue": {"scan_jobs_pending": active_scans},
-        "uptime": time.time(),
+        "uptime_seconds": round(time.time() - _START_TIME),
         "active_scans": active_scans,
         "meissner": {"state": meissner_state},
         "nodes": {
             "tensor": {"status": ollama_status, "model": "Llama 3.1 8B"},
             "kinetic": {"status": ollama_status, "model": "Qwen2.5 3B", "ram_gb": 8},
             "aegis": {"status": ollama_status, "model": "Llama 3.1 8B", "ram_gb": 8},
-            "lattice": {"status": "ready", "model": "Qdrant / Vector", "vector_count": 0},
-            "tokamak": {"status": "ready", "model": "Sandbox Ready", "active_containers": 0},
+            "lattice": {
+                "status": "ready",
+                "model": "Qdrant / Vector",
+                "vector_count": vector_count,
+            },
+            "tokamak": {
+                "status": "ready",
+                "model": "Sandbox Ready",
+                "active_containers": container_count,
+            },
         },
     }
 
@@ -827,7 +864,7 @@ async def scan_target(http_request: Request, request: ScanRequest) -> dict:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "healthy", "agents": "operational", "queue": {"scan_jobs_pending": 0}}
+    return await v1_health()
 
 
 @app.post("/workflows/execute", response_model=WorkflowResponse)
