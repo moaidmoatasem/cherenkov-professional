@@ -26,9 +26,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
-from pydantic import BaseModel
 
 from cherenkov.api.middleware.auth import (
     Role,
@@ -73,7 +73,7 @@ class _ScanRateLimiter(BaseHTTPMiddleware):
         if "/scan" not in request.url.path or request.method != "POST":
             return await call_next(request)
 
-        client_ip = (request.client.host if request.client else "unknown")
+        client_ip = request.client.host if request.client else "unknown"
         now = time.time()
         window_start = now - 60.0
 
@@ -83,7 +83,9 @@ class _ScanRateLimiter(BaseHTTPMiddleware):
             if len(hits) >= self._rpm:
                 return JSONResponse(
                     status_code=429,
-                    content={"detail": f"Rate limit exceeded: {self._rpm} scan requests/min per IP."},
+                    content={
+                        "detail": f"Rate limit exceeded: {self._rpm} scan requests/min per IP."
+                    },
                 )
             hits.append(now)
             self._window[client_ip] = hits
