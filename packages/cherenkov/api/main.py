@@ -21,7 +21,16 @@ from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
@@ -362,7 +371,6 @@ async def v1_health() -> dict:
     the Meissner shield state expected by ForensicHeader.
     """
     from cherenkov.core.circuit_breaker import meissner_hub
-    from cherenkov.core.lattice_bridge import vector_count as lattice_vector_count
 
     active_scans = _get_active_scans_count()
     ollama_status, vector_count, container_count = await asyncio.gather(
