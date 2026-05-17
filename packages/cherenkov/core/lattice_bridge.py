@@ -87,8 +87,8 @@ def _embed(text: str) -> list[float]:
 
         model = SentenceTransformer("all-MiniLM-L6-v2")
         return model.encode(text, normalize_embeddings=True).tolist()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("SentenceTransformer unavailable, using hash fallback: %s", exc)
 
     # Fallback: deterministic hash-based pseudo-vector
     digest = hashlib.sha256(text.encode()).digest()

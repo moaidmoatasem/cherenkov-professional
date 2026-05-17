@@ -11,12 +11,15 @@ OWASP A05:2021 — Security Misconfiguration
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import List
 
 import httpx
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
+
+logger = logging.getLogger("cherenkov.scanners.file_upload")
 
 # Probe filenames paired with MIME types. Content is a benign marker string.
 # We test whether the server rejects the *extension*, not the content.
@@ -92,8 +95,8 @@ class FileUploadScanner(BaseScanner):
                         )
                         break  # One confirmed finding is sufficient per scan
 
-        except Exception:
-            pass  # Network errors are not vulnerability findings
+        except Exception as exc:
+            logger.debug("File-upload scan network error for %s: %s", target, exc)
 
         duration_ms = (time.monotonic() - start) * 1000
 

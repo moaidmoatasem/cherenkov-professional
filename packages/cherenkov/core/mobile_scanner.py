@@ -8,11 +8,14 @@ to scan_file(), wrapping the result in a ScanResult.
 
 from __future__ import annotations
 
+import logging
 import time
 from abc import abstractmethod
 from typing import List
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult
+
+logger = logging.getLogger("cherenkov.scanners.mobile")
 
 
 class MobileScanner(BaseScanner):
@@ -49,9 +52,9 @@ class MobileScanner(BaseScanner):
         try:
             findings = await self.scan_file(target)
         except FileNotFoundError:
-            pass  # File not present — return empty result; caller decides whether to warn
-        except Exception:
-            pass  # Degrade gracefully; do not crash the orchestrator
+            logger.debug("%s: target file not found — %s", self.name, target)
+        except Exception as exc:
+            logger.debug("%s: scan_file degraded for %s: %s", self.name, target, exc)
 
         duration_ms = (time.monotonic() - start) * 1000
 

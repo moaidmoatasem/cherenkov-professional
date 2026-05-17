@@ -16,7 +16,7 @@ import asyncio
 import hashlib
 import json
 import logging
-import subprocess
+import subprocess  # nosec B404 — subprocess is required to manage ephemeral Docker containers (TOKAMAK core)
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -299,7 +299,7 @@ class Tokamak:
             # in deploy/docker-compose.yml.  The image name "cherenkov-tokamak"
             # was a placeholder — it does not exist as a built image.
             tokamak_image = os.environ.get("TOKAMAK_IMAGE", "kalilinux/kali-rolling")
-            process = subprocess.run(
+            process = subprocess.run(  # nosec B603 B607 — fixed arg list, no shell=True; Docker sandboxes the payload
                 [
                     "docker",
                     "run",

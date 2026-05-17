@@ -11,6 +11,7 @@ OWASP A03:2021 — Injection
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import List
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -18,6 +19,8 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import httpx
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
+
+logger = logging.getLogger("cherenkov.scanners.sqli")
 
 # Inert payloads — single-quote terminators and Boolean tautologies only.
 # Ordered from most likely to trigger verbose DB errors to least.
@@ -140,8 +143,8 @@ class SQLInjectionScanner(BaseScanner):
                     if findings:
                         break
 
-        except Exception:
-            pass  # Network / parse errors are not vulnerability findings
+        except Exception as exc:
+            logger.debug("SQLi scan network/parse error for %s: %s", target, exc)
 
         duration_ms = (time.monotonic() - start) * 1000
 

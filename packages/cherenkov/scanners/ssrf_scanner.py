@@ -11,6 +11,7 @@ OWASP A10:2021 — Server-Side Request Forgery
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import List
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -18,6 +19,8 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import httpx
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
+
+logger = logging.getLogger("cherenkov.scanners.ssrf")
 
 # Safe internal addresses used as SSRF canaries.
 # We never inject real cloud metadata endpoints (169.254.169.254) here
@@ -184,8 +187,8 @@ class SSRFScanner(BaseScanner):
                         )
                         break  # One confirmed SSRF finding per target is sufficient
 
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("SSRF scan network/parse error for %s: %s", target, exc)
 
         duration_ms = (time.monotonic() - start) * 1000
 

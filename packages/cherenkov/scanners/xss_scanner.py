@@ -11,6 +11,7 @@ OWASP A03:2021 — Injection
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import List
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -18,6 +19,8 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import httpx
 
 from cherenkov.core.base_scanner import BaseScanner, Finding, ScanResult, Severity
+
+logger = logging.getLogger("cherenkov.scanners.xss")
 
 # Probe strings — HTML/JS canaries that are safe to send but unmistakable
 # when reflected without encoding.  We look for the *raw* canary in the body
@@ -100,8 +103,8 @@ class XSSScanner(BaseScanner):
                     if findings:
                         break
 
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("XSS scan network/parse error for %s: %s", target, exc)
 
         duration_ms = (time.monotonic() - start) * 1000
 
