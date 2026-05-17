@@ -252,7 +252,6 @@ class Tokamak:
     @staticmethod
     def execute(command: Command) -> TokamakResult:
         import os
-        import subprocess
         import tempfile
         import time as time_module
 
@@ -269,6 +268,10 @@ class Tokamak:
 
             host_tmpdir = tmpdir.replace("\\", "/")
 
+            # Image: use env override or fall back to the Kali base image defined
+            # in deploy/docker-compose.yml.  The image name "cherenkov-tokamak"
+            # was a placeholder — it does not exist as a built image.
+            tokamak_image = os.environ.get("TOKAMAK_IMAGE", "kalilinux/kali-rolling")
             process = subprocess.run(
                 [
                     "docker",
@@ -276,9 +279,14 @@ class Tokamak:
                     "--rm",
                     "--network",
                     "none",
+                    "--cap-drop=ALL",
+                    "--security-opt=no-new-privileges",
+                    "--read-only",
+                    "--tmpfs=/tmp:size=64m",
+                    "--label=cherenkov.role=tokamak",
                     "-v",
-                    f"{host_tmpdir}:/workspace",
-                    "cherenkov-tokamak",
+                    f"{host_tmpdir}:/workspace:ro",
+                    tokamak_image,
                     "sh",
                     "/workspace/payload.sh",
                 ],

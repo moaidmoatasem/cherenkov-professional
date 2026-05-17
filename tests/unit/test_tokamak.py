@@ -21,11 +21,12 @@ def test_tokamak_execute_success():
         cmd_args = args[0]
         assert "docker" in cmd_args
         assert "run" in cmd_args
+        # Tokamak.execute() always runs fully air-gapped (no network egress)
         assert "--network" in cmd_args
-        # Should be standard network if not specified
-        assert "cherenkov-internal" in cmd_args
+        assert "none" in cmd_args
+        assert "--cap-drop=ALL" in cmd_args
+        assert "--read-only" in cmd_args
         assert "-v" in cmd_args
-        assert "python:3.11-slim" in cmd_args
         assert "sh" in cmd_args
         assert "/workspace/payload.sh" in cmd_args
         
@@ -93,25 +94,33 @@ def test_tokamak_signing_and_receipt():
         assert isinstance(result.duration_ms, float)
         assert result.duration_ms >= 0
 
-def test_tokamak_profile_selection():
-    # Test mobile profile
-    cmd = Command(payload="echo 'frida'", profile=TOKAMAKProfile.MOBILE)
-    
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-        Tokamak.execute(cmd)
-        
-        args = mock_run.call_args[0][0]
-        assert "cherenkov-mobile-net" in args
-        assert "python:3.11-slim" in args
+def test_tokamak_image_env_override():
+    """TOKAMAK_IMAGE env var overrides the default kali image."""
+    cmd = Command(payload="echo 'test'", scanner_name="test_scanner", timeout=5)
 
-    # Test kali profile
-    cmd = Command(payload="nmap ...", profile=TOKAMAKProfile.KALI)
-    
-    with patch("subprocess.run") as mock_run:
+    with patch("subprocess.run") as mock_run, patch.dict(
+        os.environ, {"TOKAMAK_IMAGE": "custom-image:latest"}
+    ):
         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
         Tokamak.execute(cmd)
-        
+
         args = mock_run.call_args[0][0]
-        assert "none" in args
+        assert "custom-image:latest" in args
+
+    # Default image when env var is unset
+    with patch("subprocess.run") as mock_run, patch.dict(
+        os.environ, {}, clear=False
+    ):
+        os.environ.pop("TOKAMAK_IMAGE", None)
+        mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+        Tokamak.execute(cmd)
+
+        args = mock_run.call_args[0][0]
         assert "kalilinux/kali-rolling" in args
+
+
+def test_tokamak_profile_enum_values():
+    """TOKAMAKProfile values map to the correct string identifiers."""
+    assert TOKAMAKProfile.STANDARD.value == "standard"
+    assert TOKAMAKProfile.MOBILE.value == "mobile"
+    assert TOKAMAKProfile.KALI.value == "kali"

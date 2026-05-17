@@ -21,12 +21,15 @@ from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from cherenkov.api.middleware.auth import (
     Role,
@@ -44,6 +47,7 @@ from cherenkov.core.storage.database import (
     get_user,
     save_audit_entry,
 )
+from cherenkov.core.tokamak import Command, Tokamak
 from cherenkov.orchestration.orchestration_api import orchestrate_workflow
 from cherenkov.orchestration.result_persistence import ResultStore
 from cherenkov.orchestration.workflow_parser import load_workflow
@@ -51,6 +55,11 @@ from cherenkov.orchestration.workflow_parser import load_workflow
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
+
+# ── Rate limiter (slowapi) ────────────────────────────────────────────────────
+# 30 scan submissions per minute per IP.  Protects the local Ollama instance
+# from being exhausted by a runaway client or an exposed network interface.
+_limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 
 @asynccontextmanager
@@ -71,6 +80,8 @@ app = FastAPI(
     version="1.1.0",
     lifespan=lifespan,
 )
+app.state.limiter = _limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # Include localhost:3000 (React dev server) alongside the API host origins
@@ -277,6 +288,20 @@ def _get_active_scans_count() -> int:
         return 0
 
 
+def _get_tokamak_container_count() -> int:
+    """Return the number of running cherenkov tokamak containers via Docker SDK."""
+    try:
+        import docker  # type: ignore[import-untyped]
+
+        client = docker.from_env()
+        containers = client.containers.list(
+            filters={"label": "cherenkov.role=tokamak", "status": "running"}
+        )
+        return len(containers)
+    except Exception:
+        return 0
+
+
 @v1.get("/health")
 async def v1_health() -> dict:
     """Health check used by useMetrics / useQueueDepth hooks.
@@ -285,11 +310,15 @@ async def v1_health() -> dict:
     the Meissner shield state expected by ForensicHeader.
     """
     from cherenkov.core.circuit_breaker import meissner_hub
+    from cherenkov.core.lattice_bridge import vector_count as lattice_vector_count
 
     active_scans = _get_active_scans_count()
-
     ollama_status = await _check_ollama()
     meissner_state = meissner_hub.state.value.upper()
+
+    lattice_count = await asyncio.to_thread(lattice_vector_count)
+    tokamak_containers = await asyncio.to_thread(_get_tokamak_container_count)
+    lattice_status = "ready" if lattice_count >= 0 else "offline"
 
     return {
         "status": "healthy",
@@ -302,8 +331,16 @@ async def v1_health() -> dict:
             "tensor": {"status": ollama_status, "model": "Llama 3.1 8B"},
             "kinetic": {"status": ollama_status, "model": "Qwen2.5 3B", "ram_gb": 8},
             "aegis": {"status": ollama_status, "model": "Llama 3.1 8B", "ram_gb": 8},
-            "lattice": {"status": "ready", "model": "Qdrant / Vector", "vector_count": 0},
-            "tokamak": {"status": "ready", "model": "Sandbox Ready", "active_containers": 0},
+            "lattice": {
+                "status": lattice_status,
+                "model": "Qdrant / Vector",
+                "vector_count": lattice_count,
+            },
+            "tokamak": {
+                "status": "ready",
+                "model": "Sandbox Ready",
+                "active_containers": tokamak_containers,
+            },
         },
     }
 
@@ -361,10 +398,16 @@ async def v1_sandbox_status() -> dict:
 
 
 @v1.post("/scan")
+@_limiter.limit("30/minute")
 async def v1_scan(
-    request: "ScanRequest", current_user: AuthUser = Depends(get_current_user)
+    http_request: Request,
+    request: "ScanRequest",
+    current_user: AuthUser = Depends(get_current_user),
 ) -> dict:
-    """Proxy to the core scan engine; broadcasts a live event on completion."""
+    """Proxy to the core scan engine; broadcasts a live event on completion.
+
+    Rate-limited to 30 requests/minute per IP to protect Ollama from exhaustion.
+    """
     result = await _run_scan(request)
 
     # Audit log
@@ -392,6 +435,7 @@ async def v1_scan_history() -> list[dict]:
     from cherenkov.core.storage.database import list_scans
 
     return list_scans(20)
+
 
 @v1.get("/reports/{scan_id}/sarif")
 async def v1_scan_report_sarif(scan_id: str) -> dict:
@@ -453,9 +497,7 @@ async def v1_scan_report_sarif(scan_id: str) -> dict:
 
 
 @v1.get("/reports/{scan_id}/pdf")
-async def v1_scan_report_pdf(
-    scan_id: str, current_user: AuthUser = Depends(get_current_user)
-):
+async def v1_scan_report_pdf(scan_id: str, current_user: AuthUser = Depends(get_current_user)):
     """Download PDF security report."""
     from fastapi.responses import Response
 
@@ -610,7 +652,6 @@ async def v1_reject_finding(
         raise HTTPException(status_code=500, detail=f"Failed to reject finding: {exc}") from exc
 
 
-
 # Serve the static dashboard assets
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -636,44 +677,6 @@ class FindingApproval(BaseModel):
 class WorkflowExecuteRequest(BaseModel):
     workflow_name: str
     config: Optional[Dict[str, Any]] = None
-
-
-class AssistantAdviceRequest(BaseModel):
-    findings: List[dict]
-    context: Optional[dict] = None
-
-
-@v1.post("/assistant/advice")
-async def v1_assistant_advice(
-    request: AssistantAdviceRequest, current_user: AuthUser = Depends(get_current_user)
-) -> dict:
-    """Get remediation advice from the AI Studio Assistant (Ollama)."""
-    import json
-
-    import httpx
-
-    prompt = f"As a security expert, provide concise remediation advice for the following findings:\n{json.dumps(request.findings)}"
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            ollama_status = await _check_ollama()
-            if ollama_status != "ready":
-                return {
-                    "advice": "AI Studio Assistant is offline (Ollama not detected). Manual remediation recommended.",
-                    "status": "offline",
-                }
-
-            r = await client.post(
-                "http://localhost:11434/api/generate",
-                json={"model": "mistral", "prompt": prompt, "stream": False},
-            )
-            if r.status_code == 200:
-                data = r.json()
-                return {"advice": data.get("response", ""), "status": "ready"}
-            else:
-                return {"advice": "Failed to get advice from Ollama.", "status": "error"}
-    except Exception as exc:
-        return {"advice": f"Assistant error: {exc}", "status": "error"}
 
 
 class WorkflowResponse(BaseModel):
@@ -833,7 +836,8 @@ async def scan_target(request: ScanRequest) -> dict:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "healthy", "agents": "operational", "queue": {"scan_jobs_pending": 0}}
+    """Legacy health endpoint — delegates to /api/v1/health for live data."""
+    return await v1_health()
 
 
 @app.post("/workflows/execute", response_model=WorkflowResponse)
