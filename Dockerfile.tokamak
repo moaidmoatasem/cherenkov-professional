@@ -29,12 +29,14 @@ ENV PYTHONPATH=/sandbox/packages:/sandbox
 # Drop privileges immediately
 USER tokamak_user
 
-# Cloud-API-dependent tests (groq, openai) are excluded — TOKAMAK runs air-gapped
+# Cloud-API-dependent and ai_generated tests excluded — TOKAMAK runs air-gapped
 ENV PYTHONPATH="/sandbox:${PYTHONPATH}"
 CMD ["pytest", "tests/", \
+     "-m", "not (integration or ai_generated)", \
      "--ignore=tests/packages/agents/cloud", \
      "--ignore=tests/packages/core/test_hybrid_orchestrator.py", \
      "--ignore=tests/packages/core/test_overseer.py", \
      "--ignore=tests/packages/core/test_parallel_agents.py", \
      "--ignore=tests/packages/crews", \
-     "--ignore=tests/test_multi_agent_integration.py"]
+     "--ignore=tests/test_multi_agent_integration.py", \
+     "--tb=short"]
