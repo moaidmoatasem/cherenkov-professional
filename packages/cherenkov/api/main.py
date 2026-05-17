@@ -116,35 +116,72 @@ app.add_middleware(
 
 # ── WebSocket live-event broadcast ───────────────────────────────────────────
 
-_ws_clients: Set[WebSocket] = set()
+_ws_clients: Dict[WebSocket, Set[str]] = {}
 
 
 async def _broadcast(event: dict) -> None:
     """Push a JSON event to every connected WebSocket client."""
     dead: Set[WebSocket] = set()
     payload = json.dumps(event)
-    for ws in list(_ws_clients):
+
+    event_type = event.get("type")
+    scan_id = event.get("scan_id")
+
+    for ws, subscriptions in list(_ws_clients.items()):
+        # If it's a scan_progress event and it specifies a scan_id, filter by subscriptions.
+        # If the client isn't subscribed to any scans, we broadcast it anyway (backwards compatible),
+        # or we could strictly filter. The requirement implies filtering based on subscription.
+        # Let's broadcast unless they explicitly missed the subscription, but the safer approach:
+        if event_type == "scan_progress" and scan_id and scan_id not in subscriptions:
+            # If they have subscriptions but this scan_id isn't one of them, skip.
+            # If they have NO subscriptions, we still send it to be safe (dashboard might need it all).
+            # But normally, if subscriptions exist, we filter.
+            if subscriptions:
+                continue
+
         try:
             await ws.send_text(payload)
         except Exception:
             dead.add(ws)
-    _ws_clients.difference_update(dead)
+
+    for ws in dead:
+        _ws_clients.pop(ws, None)
+
+
+async def _health_pulse_loop(websocket: WebSocket) -> None:
+    try:
+        while True:
+            await asyncio.sleep(5)
+            await websocket.send_text(json.dumps({"type": "health_pulse"}))
+    except Exception:
+        pass
 
 
 @app.websocket("/ws/live")
 async def ws_live(websocket: WebSocket) -> None:
     """Live event stream for the CHERENKOV web dashboard."""
     await websocket.accept()
-    _ws_clients.add(websocket)
+    _ws_clients[websocket] = set()
+
+    pulse_task = asyncio.create_task(_health_pulse_loop(websocket))
+
     try:
         while True:
-            # Keep-alive: echo any client ping, otherwise just wait
-            await asyncio.sleep(30)
-            await websocket.send_text(json.dumps({"type": "ping"}))
+            data = await websocket.receive_json()
+            command = data.get("command")
+            scan_id = data.get("scan_id")
+
+            if command == "subscribe_scan" and scan_id:
+                _ws_clients[websocket].add(scan_id)
+            elif command == "unsubscribe_scan" and scan_id:
+                _ws_clients[websocket].discard(scan_id)
     except WebSocketDisconnect:
         pass
+    except Exception:
+        pass
     finally:
-        _ws_clients.discard(websocket)
+        pulse_task.cancel()
+        _ws_clients.pop(websocket, None)
 
 
 # ── /api/v1 router (consumed by the React frontend) ─────────────────────────
@@ -322,8 +359,17 @@ async def v1_erase_target(
 
 async def _check_ollama() -> str:
     try:
-        async with httpx.AsyncClient(timeout=1.0) as c:
+        async with httpx.AsyncClient(timeout=3.0) as c:
             r = await c.get("http://localhost:11434/api/tags")
+            return "ready" if r.status_code == 200 else "offline"
+    except Exception:
+        return "offline"
+
+
+async def _check_qdrant() -> str:
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as c:
+            r = await c.get("http://localhost:6333/health")
             return "ready" if r.status_code == 200 else "offline"
     except Exception:
         return "offline"
@@ -371,30 +417,29 @@ async def v1_health() -> dict:
     Returns the node topology expected by NodeStatusRow and
     the Meissner shield state expected by ForensicHeader.
     """
-    from cherenkov.core.circuit_breaker import meissner_hub
+
+    from cherenkov.core.storage.database import db_stats
 
     active_scans = _get_active_scans_count()
-    ollama_status, vector_count, container_count = await asyncio.gather(
+    ollama_status, qdrant_status, vector_count, container_count = await asyncio.gather(
         _check_ollama(),
+        _check_qdrant(),
         _get_qdrant_vector_count(),
         asyncio.to_thread(_get_tokamak_container_count),
     )
-    meissner_state = meissner_hub.state.value.upper()
-    lattice_status = "ready" if vector_count >= 0 else "offline"
 
     return {
         "status": "healthy",
-        "agents": "operational",
+        "version": "1.1.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "storage": db_stats(),
         "queue": {"scan_jobs_pending": active_scans},
-        "uptime_seconds": round(time.time() - _START_TIME),
-        "active_scans": active_scans,
-        "meissner": {"state": meissner_state},
         "nodes": {
             "tensor": {"status": ollama_status, "model": "Llama 3.1 8B"},
             "kinetic": {"status": ollama_status, "model": "Qwen2.5 3B", "ram_gb": 8},
             "aegis": {"status": ollama_status, "model": "Llama 3.1 8B", "ram_gb": 8},
             "lattice": {
-                "status": lattice_status,
+                "status": qdrant_status,
                 "model": "Qdrant / Vector",
                 "vector_count": vector_count,
             },
@@ -793,7 +838,9 @@ _active_scan_targets: set[str] = set()
 _active_scan_lock = asyncio.Lock()
 
 
-async def _run_scan(request: "ScanRequest", background_tasks: Optional[BackgroundTasks] = None) -> dict:
+async def _run_scan(
+    request: "ScanRequest", background_tasks: Optional[BackgroundTasks] = None
+) -> dict:
     """Core scan logic shared by /api/scan and /api/v1/scan."""
     from cherenkov.core.engine import ScanEngine
     from cherenkov.core.registry import ScannerRegistry
