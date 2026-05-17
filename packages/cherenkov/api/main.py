@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
@@ -402,13 +402,14 @@ async def v1_sandbox_status() -> dict:
 async def v1_scan(
     http_request: Request,
     request: "ScanRequest",
+    background_tasks: BackgroundTasks,
     current_user: AuthUser = Depends(get_current_user),
 ) -> dict:
     """Proxy to the core scan engine; broadcasts a live event on completion.
 
     Rate-limited to 30 requests/minute per IP to protect Ollama from exhaustion.
     """
-    result = await _run_scan(request)
+    result = await _run_scan(request, background_tasks)
 
     # Audit log
     save_audit_entry(
@@ -631,7 +632,9 @@ async def v1_approve_finding(
 
 @v1.post("/findings/{finding_id}/reject")
 async def v1_reject_finding(
-    finding_id: str, current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR))
+    finding_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: AuthUser = Depends(RoleChecker(Role.OPERATOR)),
 ) -> dict:
     """Reject a finding (marks it as false positive). Requires OPERATOR role or higher.
 
@@ -652,8 +655,8 @@ async def v1_reject_finding(
             details={"finding_id": finding_id},
         )
 
-        # Mark as false positive in LATTICE — non-blocking
-        asyncio.create_task(asyncio.to_thread(label_false_positive, finding_id))
+        # Mark as false positive in LATTICE — runs after response, avoids event-loop leakage
+        background_tasks.add_task(label_false_positive, finding_id)
 
         return {"status": "success", "finding_id": finding_id, "new_status": "rejected"}
     except Exception as exc:
@@ -720,7 +723,7 @@ async def _forward_to_siem(vulnerabilities: list[dict], target: str):
         logger.debug("Forwarded finding to local SIEM: %s", v["title"])
 
 
-async def _run_scan(request: "ScanRequest") -> dict:
+async def _run_scan(request: "ScanRequest", background_tasks: Optional[BackgroundTasks] = None) -> dict:
     """Core scan logic shared by /api/scan and /api/v1/scan."""
     from cherenkov.core.engine import ScanEngine
     from cherenkov.core.registry import ScannerRegistry
@@ -797,9 +800,10 @@ async def _run_scan(request: "ScanRequest") -> dict:
             finding_id = str(uuid.uuid4())
 
             # Index every finding in LATTICE for similarity recall and FP learning.
-            # Run in a background thread — Qdrant unavailability must not block scan response.
-            asyncio.create_task(
-                asyncio.to_thread(
+            # Use BackgroundTasks so the work runs after response delivery and
+            # doesn't leak asyncio tasks into subsequent test event loops.
+            if background_tasks is not None:
+                background_tasks.add_task(
                     embed_and_store,
                     finding_id,
                     v["title"],
@@ -809,7 +813,23 @@ async def _run_scan(request: "ScanRequest") -> dict:
                     v["severity"],
                     v.get("cwe", ""),
                 )
-            )
+            else:
+                # Fallback for callers that don't supply background_tasks
+                try:
+                    asyncio.get_running_loop().create_task(
+                        asyncio.to_thread(
+                            embed_and_store,
+                            finding_id,
+                            v["title"],
+                            v.get("description", ""),
+                            request.url,
+                            v["scanner"],
+                            v["severity"],
+                            v.get("cwe", ""),
+                        )
+                    )
+                except RuntimeError:
+                    pass  # No running loop — skip indexing in this context
 
             if v["severity"] in ("CRITICAL", "HIGH"):
                 save_pending_finding(
@@ -819,21 +839,27 @@ async def _run_scan(request: "ScanRequest") -> dict:
                     title=v["title"],
                     scan_id=scan_id,
                 )
-                asyncio.create_task(
-                    _broadcast(
-                        {
-                            "type": "finding_discovered",
-                            "finding_id": finding_id,
-                            "severity": v["severity"],
-                        }
+                try:
+                    asyncio.get_running_loop().create_task(
+                        _broadcast(
+                            {
+                                "type": "finding_discovered",
+                                "finding_id": finding_id,
+                                "severity": v["severity"],
+                            }
+                        )
                     )
-                )
+                except RuntimeError:
+                    pass  # No running loop — skip WebSocket broadcast in this context
 
     except Exception as exc:
         logger.error("Failed to persist scan %s: %s", scan_id, exc)
 
     # Trigger SIEM forwarding
-    asyncio.create_task(_forward_to_siem(vulnerabilities, request.url))
+    try:
+        asyncio.get_running_loop().create_task(_forward_to_siem(vulnerabilities, request.url))
+    except RuntimeError:
+        pass  # No running loop — skip SIEM forwarding in this context
 
     return {
         "scan_id": scan_id,

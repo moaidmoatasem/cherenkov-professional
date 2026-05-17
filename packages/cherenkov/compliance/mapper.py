@@ -1,3 +1,5 @@
+FRAMEWORKS: list[str] = ["OWASP", "SAMA_CSF", "EGY_FIN_CSF", "DORA"]
+
 MAPPING: dict[str, dict[str, list[str]]] = {
     "CWE-79":  {"OWASP": ["A03:2021"], "SAMA_CSF": ["3.3.5"], "EGY_FIN_CSF": ["PR.AC-4"], "DORA": ["Art.9.4"]},
     "CWE-89":  {"OWASP": ["A03:2021"], "SAMA_CSF": ["3.3.6"], "EGY_FIN_CSF": ["PR.DS-5"], "DORA": ["Art.9.4"]},
