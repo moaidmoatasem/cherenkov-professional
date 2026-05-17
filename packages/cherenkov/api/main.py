@@ -21,14 +21,15 @@ from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request as StarletteRequest
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from cherenkov.api.middleware.auth import (
     Role,
@@ -55,42 +56,14 @@ logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
-# ── Rate limiting (token bucket, per-IP, no external deps) ───────────────────
+# Rate limits are intentionally conservative — scanning is CPU/GPU-heavy and
+# an unbounded queue would exhaust the local Ollama instance.
+_SCAN_RATE = os.getenv("CHERENKOV_SCAN_RATE_LIMIT", "20/minute")
+_WORKFLOW_RATE = os.getenv("CHERENKOV_WORKFLOW_RATE_LIMIT", "10/minute")
 
-_SCAN_RATE_LIMIT = int(os.getenv("CHERENKOV_SCAN_RPM", "10"))  # requests per minute per IP
+limiter = Limiter(key_func=get_remote_address)
 
-
-class _ScanRateLimiter(BaseHTTPMiddleware):
-    """Sliding-window rate limiter for /api/*/scan endpoints."""
-
-    def __init__(self, app, rpm: int = _SCAN_RATE_LIMIT):
-        super().__init__(app)
-        self._rpm = rpm
-        self._window: dict[str, list[float]] = {}
-        self._lock = asyncio.Lock()
-
-    async def dispatch(self, request: StarletteRequest, call_next):
-        if "/scan" not in request.url.path or request.method != "POST":
-            return await call_next(request)
-
-        client_ip = request.client.host if request.client else "unknown"
-        now = time.time()
-        window_start = now - 60.0
-
-        async with self._lock:
-            hits = self._window.get(client_ip, [])
-            hits = [t for t in hits if t > window_start]
-            if len(hits) >= self._rpm:
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "detail": f"Rate limit exceeded: {self._rpm} scan requests/min per IP."
-                    },
-                )
-            hits.append(now)
-            self._window[client_ip] = hits
-
-        return await call_next(request)
+_START_TIME = time.time()
 
 
 @asynccontextmanager
@@ -112,6 +85,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Include localhost:3000 (React dev server) alongside the API host origins
 _ALLOWED_ORIGINS = os.getenv(
@@ -119,7 +94,6 @@ _ALLOWED_ORIGINS = os.getenv(
     "http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000,http://127.0.0.1:3000",
 ).split(",")
 
-app.add_middleware(_ScanRateLimiter)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
@@ -402,8 +376,11 @@ async def v1_sandbox_status() -> dict:
 
 
 @v1.post("/scan")
+@limiter.limit(_SCAN_RATE)
 async def v1_scan(
-    request: "ScanRequest", current_user: AuthUser = Depends(get_current_user)
+    http_request: Request,
+    request: "ScanRequest",
+    current_user: AuthUser = Depends(get_current_user),
 ) -> dict:
     """Proxy to the core scan engine; broadcasts a live event on completion."""
     result = await _run_scan(request)
@@ -839,7 +816,8 @@ async def _run_scan(request: "ScanRequest") -> dict:
 
 
 @app.post("/api/scan")
-async def scan_target(request: ScanRequest) -> dict:
+@limiter.limit(_SCAN_RATE)
+async def scan_target(http_request: Request, request: ScanRequest) -> dict:
     """Run all registered scanners against a target URL."""
     return await _run_scan(request)
 
@@ -853,7 +831,10 @@ async def health() -> dict:
 
 
 @app.post("/workflows/execute", response_model=WorkflowResponse)
-async def execute_workflow(request: WorkflowExecuteRequest) -> WorkflowResponse:
+@limiter.limit(_WORKFLOW_RATE)
+async def execute_workflow(
+    http_request: Request, request: WorkflowExecuteRequest
+) -> WorkflowResponse:
     """Execute a workflow by name or config"""
     try:
         # Load workflow config
