@@ -16,16 +16,20 @@ class ScannerRegistry:
         self._registry: Dict[str, Type[BaseScanner]] = {}
         self._load_scanners()
 
-        # Explicitly import and register new scanners per requirements
+        # Explicitly import and register graduated scanners
         from cherenkov.scanners.file_upload_scanner import FileUploadScanner
         from cherenkov.scanners.mobile.android_scanner import AndroidScanner
         from cherenkov.scanners.mobile.ios_scanner import IOSScanner
         from cherenkov.scanners.path_traversal_scanner import PathTraversalScanner
+        from cherenkov.scanners.sql_injection_scanner import SQLInjectionScanner
+        from cherenkov.scanners.ssrf_scanner import SSRFScanner
         from cherenkov.scanners.xxe_scanner import XXEScanner
 
         self.register(XXEScanner)
         self.register(PathTraversalScanner)
         self.register(FileUploadScanner)
+        self.register(SQLInjectionScanner)
+        self.register(SSRFScanner)
         self.register(AndroidScanner)
         self.register(IOSScanner)
 

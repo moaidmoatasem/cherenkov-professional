@@ -11,6 +11,7 @@ MAPPING: dict[str, dict[str, list[str]]] = {
     "CWE-502": {"OWASP": ["A08:2021"], "SAMA_CSF": ["3.3.8"], "EGY_FIN_CSF": ["PR.DS-6"], "DORA": ["Art.9.4"]},
     "CWE-200": {"OWASP": ["A01:2021"], "SAMA_CSF": ["3.4.1"], "EGY_FIN_CSF": ["PR.DS-1"], "DORA": ["Art.9.2"]},
     "CWE-918": {"OWASP": ["A10:2021"], "SAMA_CSF": ["3.3.9"], "EGY_FIN_CSF": ["PR.AC-5"], "DORA": ["Art.9.3"]},
+    "CWE-434": {"OWASP": ["A05:2021"], "SAMA_CSF": ["3.3.10"], "EGY_FIN_CSF": ["PR.DS-3"], "DORA": ["Art.9.4"]},
 }
 
 class ComplianceMapper:
