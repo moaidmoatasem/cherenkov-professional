@@ -3,7 +3,7 @@
 ## Build Health
 | Check | Status |
 |---|---|
-| Tests | ✅ 68 passed, 7 skipped (integration correctly gated) |
+| Tests | ✅ 146 passed, 36 skipped, 2 xfailed, 0 failures |
 | Ruff lint | ✅ Passing |
 | Ruff format | ✅ Passing |
 | TypeScript (web) | ✅ Zero errors |
@@ -15,17 +15,40 @@
 ### Sprint Progress
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 1 — BaseScanner | Uniform scanner interface | ✅ Done — `packages/cherenkov/core/base_scanner.py` |
-| Sprint 2 — Parallel Orchestration | asyncio + AIMD circuit breakers | ✅ Done — `circuit_breaker.py`, `ai_workflows_orchestrator.py` |
-| Sprint 3 — TOKAMAK Sandbox | Docker isolation + PoC execution | 🔄 In Progress — `core/tokamak.py` exists, Docker wire-up pending |
-| Sprint 4 — HITL Workflows | API pause gate + UI approval flow | ⏳ Not started |
-| Sprint 5 — Compliance & Reporting | SAMA/EGY-FIN mapping + PDF/SARIF | ⏳ Not started |
+| Sprint 1 — BaseScanner | Uniform scanner interface | ✅ Done |
+| Sprint 2 — Parallel Orchestration | asyncio + AIMD circuit breakers | ✅ Done |
+| Sprint 3 — TOKAMAK Sandbox | Docker isolation + PoC execution | ✅ Done — kali-rolling image, hardening flags, exec_run PoC |
+| Sprint 4 — HITL Workflows | API pause gate + operator approval | ✅ Done — approve/reject/pending endpoints + SQLite WAL |
+| Sprint 5 — Compliance & Reporting | SAMA/EGY-FIN mapping + PDF/SARIF | ✅ Done — 11 CWEs mapped, SARIF + PDF endpoints |
+| Scanner Graduation | 6 production scanners under BaseScanner | ✅ Done — XXE, XSS, PathTraversal, FileUpload, SQLi, SSRF |
 
-## Active Work
-- **Frontend dashboard** (`packages/cherenkov/web/`) — React 19 / Vite / Tailwind v4, live scan results, WebSocket events ✅
-- **FastAPI backend** (`packages/cherenkov/api/main.py`) — `/api/v1/*` routes, `/ws/live` WebSocket, scan history ✅
-- **Scanner graduation** — promoting `autonomous_generated/scanners/` into `packages/cherenkov/scanners/` under `BaseScanner` contract
-- **TOKAMAK Docker** — `Dockerfile.tokamak` + `core/tokamak.py` need `Command` pattern + sandbox network isolation
+### Phase 2 Wiring (completed)
+- **LATTICE vector store** — Qdrant + sentence-transformers; every finding indexed, FP auto-labelled, `/api/v1/lattice/similar` query endpoint
+- **Rate limiting** — slowapi, 30 req/min on `/api/v1/scan`
+- **Health endpoint** — live Ollama check, real Meissner state, TOKAMAK container count, LATTICE vector count
+- **TOKAMAK hardening** — `--cap-drop=ALL --security-opt=no-new-privileges --read-only`, `exec_run` payload injection
+- **Test ordering fix** — removed global `sys.modules["pydantic"] = MagicMock()` from `test_registry.py`
+- **BackgroundTasks migration** — replaced `asyncio.create_task(to_thread(...))` with FastAPI `BackgroundTasks`
+
+## Active Scanners (registered in ScannerRegistry)
+| Scanner | CWE | Severity | SAMA CSF | EGY-FIN CSF |
+|---|---|---|---|---|
+| XXEScanner | CWE-611 | HIGH | 3.3.7 | PR.DS-2 |
+| XSSScanner | CWE-79 | HIGH | 3.3.5 | PR.AC-4 |
+| PathTraversalScanner | CWE-22 | HIGH | 3.2.1 | PR.AC-1 |
+| FileUploadScanner | CWE-434 | HIGH | 3.3.10 | PR.DS-3 |
+| SQLInjectionScanner | CWE-89 | CRITICAL | 3.3.6 | PR.DS-5 |
+| SSRFScanner | CWE-918 | HIGH | 3.3.9 | PR.AC-5 |
+| AndroidScanner | — | varies | — | — |
+| IOSScanner | — | varies | — | — |
+
+## Backlog (Phase 3 / v1.5.0)
+- [ ] HITL UI — `PendingApprovalsPanel` badge count in `ForensicHeader` (Antigravity domain)
+- [ ] Auth token fixture for `tests/packages/api/test_hitl_api.py` (2 xfail tests)
+- [ ] Branch protection on `main` — require PR + CI pass
+- [ ] `autonomous_generated/` cleanup — remove broken/duplicate files
+- [ ] CSRF scanner (CWE-352) — next graduation candidate
+- [ ] Open Redirect scanner (CWE-601) — next graduation candidate
 
 ## Agent Coordination
 | Agent | Domain | Channel |
