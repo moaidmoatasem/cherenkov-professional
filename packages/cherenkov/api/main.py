@@ -147,9 +147,13 @@ async def ws_live(websocket: WebSocket) -> None:
     _ws_clients.add(websocket)
     try:
         while True:
-            # Keep-alive: echo any client ping, otherwise just wait
-            await asyncio.sleep(30)
-            await websocket.send_text(json.dumps({"type": "ping"}))
+            await websocket.send_json({
+                'event': 'health_pulse',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'queue_depth': 0,
+                'active_scans': 0
+            })
+            await asyncio.sleep(5)
     except WebSocketDisconnect:
         pass
     finally:
