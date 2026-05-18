@@ -12,7 +12,7 @@ def init_auth():
 
     # Default admin user
     username = "admin"
-    password = "password123"
+    password = "admin"
     hashed = hash_password(password)
 
     save_user(username, hashed, Role.ADMIN)
