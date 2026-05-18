@@ -145,12 +145,14 @@ async def ws_live(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            await websocket.send_json({
-                'event': 'health_pulse',
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'queue_depth': 0,
-                'active_scans': 0
-            })
+            await websocket.send_json(
+                {
+                    "event": "health_pulse",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "queue_depth": 0,
+                    "active_scans": 0,
+                }
+            )
             await asyncio.sleep(5)
     except WebSocketDisconnect:
         pass
