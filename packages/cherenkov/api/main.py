@@ -81,9 +81,9 @@ _START_TIME = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from cherenkov.api.middleware.auth import Role, hash_password
     from cherenkov.core.circuit_breaker import meissner_hub
-    from cherenkov.core.storage.database import init_db, save_user, get_user
-    from cherenkov.api.middleware.auth import hash_password, Role
+    from cherenkov.core.storage.database import get_user, init_db, save_user
 
     # Initialize database
     init_db()

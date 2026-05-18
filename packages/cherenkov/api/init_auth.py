@@ -16,7 +16,7 @@ def init_auth():
     hashed = hash_password(password)
 
     save_user(username, hashed, Role.ADMIN)
-    logger.info(f"Initialized default user: {username}:{password} (Role: ADMIN)")
+    logger.info(f"Initialized default user: {username} (Role: ADMIN)")
 
 
 if __name__ == "__main__":
