@@ -5,7 +5,6 @@ from cherenkov.crews.autonomous_developer_crew import AutonomousDeveloperCrew
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="CrewAI/OpenAI not in CHERENKOV stack — Ollama only")
 def test_autonomous_developers():
     # Create output directory
     os.makedirs("output", exist_ok=True)

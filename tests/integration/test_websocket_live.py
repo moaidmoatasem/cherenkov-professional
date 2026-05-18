@@ -1,24 +1,23 @@
-import pytest
 import json
 from unittest.mock import patch
-from fastapi.testclient import TestClient
+
+import pytest
 from cherenkov.api.main import app
+from fastapi.testclient import TestClient
+
 
 def test_websocket_live(monkeypatch):
-    import cherenkov.api.main as main_module
+    # To prevent TestClient from hanging forever due to the infinite while True loop
+    # and the asyncio.sleep(5), we can mock asyncio.sleep to raise an exception or
+    # simply use monkeypatch to break the loop or let it close when exiting the with block.
+    # Actually, TestClient handles websocket disconnects reasonably well if we just exit the context.
+    import asyncio
 
-    # We don't want the real background loop to keep going forever and blocking TestClient exit
-    # TestClient doesn't cancel background tasks immediately if they are created with asyncio.create_task and don't exit.
+    # Let's mock asyncio.sleep so the test runs instantly and we don't wait 5 seconds.
+    async def mock_sleep(*args, **kwargs):
+        pass
 
-    # Let's mock the _health_pulse_loop so it only sends 2 pulses then exits, preventing hangs.
-    original_pulse_loop = main_module._health_pulse_loop
-
-    async def mock_pulse_loop(websocket):
-        for _ in range(3):
-            # No sleep needed for test
-            await websocket.send_text(json.dumps({"type": "health_pulse"}))
-
-    monkeypatch.setattr(main_module, "_health_pulse_loop", mock_pulse_loop)
+    monkeypatch.setattr(asyncio, "sleep", mock_sleep)
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/live") as websocket:

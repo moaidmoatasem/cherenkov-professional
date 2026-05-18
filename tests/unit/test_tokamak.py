@@ -1,9 +1,8 @@
 import os
 import subprocess
-from unittest.mock import MagicMock, patch
-
 import pytest
-from cherenkov.core.tokamak import Command, Tokamak, TOKAMAKProfile, TokamakResult
+from unittest.mock import patch, MagicMock
+from cherenkov.core.tokamak import Tokamak, Command, TokamakResult, TOKAMAKProfile
 
 
 def test_tokamak_execute_success():

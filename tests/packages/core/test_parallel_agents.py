@@ -8,7 +8,6 @@ load_dotenv()
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="CrewAI/OpenAI not in CHERENKOV stack — Ollama only")
 def test_parallel_agents():
     local_llm = LLM(model="ollama/qwen2.5:3b", base_url="http://localhost:11434")
 

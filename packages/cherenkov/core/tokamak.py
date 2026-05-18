@@ -1,4 +1,4 @@
-# packages/cherenkov/core/tokamak.py
+# src/cherenkov/core/tokamak.py
 """
 Scan tokamak — ephemeral Docker containers per scan.
 

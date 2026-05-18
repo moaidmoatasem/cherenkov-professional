@@ -1,4 +1,4 @@
-# packages/cherenkov/agents/tokamak.py
+# src/cherenkov/agents/tokamak.py
 """
 Tokamak (البرهان) — Proof validation agent.
 

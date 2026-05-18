@@ -1,7 +1,6 @@
-from unittest.mock import AsyncMock, patch
-
-import httpx
 import pytest
+import httpx
+from unittest.mock import AsyncMock, patch
 from cherenkov.core.base_scanner import Severity
 
 FileUploadScanner = pytest.importorskip(

@@ -1,9 +1,8 @@
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import httpx
 import pytest
-from cherenkov.core.base_scanner import Severity
+import httpx
+from unittest.mock import AsyncMock, patch, MagicMock
 from cherenkov.scanners.sql_injection_scanner import SQLInjectionScanner, _inject_into_params
+from cherenkov.core.base_scanner import Severity
 
 
 @pytest.mark.asyncio

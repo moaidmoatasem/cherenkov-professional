@@ -12,11 +12,11 @@ def init_auth():
 
     # Default admin user
     username = "admin"
-    password = "admin"
+    password = "password123"
     hashed = hash_password(password)
 
     save_user(username, hashed, Role.ADMIN)
-    logger.info(f"Initialized default user: {username} (Role: ADMIN)")
+    logger.info(f"Initialized default user: {username}:{password} (Role: ADMIN)")
 
 
 if __name__ == "__main__":
