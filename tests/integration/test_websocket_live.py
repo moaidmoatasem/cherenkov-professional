@@ -1,7 +1,9 @@
 import pytest
 import json
+import asyncio
 from unittest.mock import patch
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 from cherenkov.api.main import app
 
 def test_websocket_live(monkeypatch):
@@ -10,15 +12,17 @@ def test_websocket_live(monkeypatch):
     # We don't want the real background loop to keep going forever and blocking TestClient exit
     # TestClient doesn't cancel background tasks immediately if they are created with asyncio.create_task and don't exit.
 
-    # Let's mock the _health_pulse_loop so it only sends 2 pulses then exits, preventing hangs.
-    original_pulse_loop = main_module._health_pulse_loop
+    # Mock asyncio.sleep to raise WebSocketDisconnect after 2 iterations
+    sleep_call_count = 0
 
-    async def mock_pulse_loop(websocket):
-        for _ in range(3):
-            # No sleep needed for test
-            await websocket.send_text(json.dumps({"type": "health_pulse"}))
+    async def mock_sleep(*args, **kwargs):
+        nonlocal sleep_call_count
+        sleep_call_count += 1
+        if sleep_call_count >= 3:
+            raise WebSocketDisconnect()
+        return
 
-    monkeypatch.setattr(main_module, "_health_pulse_loop", mock_pulse_loop)
+    monkeypatch.setattr(main_module.asyncio, "sleep", mock_sleep)
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/live") as websocket:
