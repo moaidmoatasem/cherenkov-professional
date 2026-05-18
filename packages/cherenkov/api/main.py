@@ -297,16 +297,12 @@ async def v1_assistant_advice(
         return {"advice": f"Assistant error: {exc}", "status": "error"}
 
 
-@app.post('/api/v1/auth/token')
+@app.post("/api/v1/auth/token")
 async def login(credentials: dict):
-    if credentials.get('username') == 'admin' \
-       and credentials.get('password') == 'admin':
-        return {
-            'access_token': 'cherenkov-dev-token',
-            'token_type': 'bearer'
-        }
-    raise HTTPException(status_code=401,
-                        detail='Invalid credentials')
+    if credentials.get("username") == "admin" and credentials.get("password") == "admin":
+        return {"access_token": "cherenkov-dev-token", "token_type": "bearer"}
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
 
 @v1.post("/auth/token")
 async def v1_auth_token(request: AuthRequest) -> dict:
