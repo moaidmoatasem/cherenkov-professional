@@ -1,11 +1,12 @@
 import pytest
-from fastapi.testclient import TestClient
 from cherenkov.api.main import app
+from fastapi.testclient import TestClient
+
 
 from unittest.mock import patch
 from fastapi import WebSocketDisconnect
 
-@patch('cherenkov.api.main.asyncio.sleep', side_effect=WebSocketDisconnect)
+@patch("asyncio.sleep", side_effect=WebSocketDisconnect)
 def test_websocket_live(mock_sleep):
     client = TestClient(app)
     with client.websocket_connect("/ws/live") as websocket:

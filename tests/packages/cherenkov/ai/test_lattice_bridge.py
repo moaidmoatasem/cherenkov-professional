@@ -1,146 +1,72 @@
-import sys
-from unittest.mock import MagicMock, patch
-
 import pytest
+from unittest.mock import patch, MagicMock
+import hashlib
 
-# Mock sys.modules for qdrant_client and sentence_transformers
-mock_qdrant = MagicMock()
-mock_st = MagicMock()
-sys.modules["qdrant_client"] = mock_qdrant
-sys.modules["qdrant_client.models"] = mock_qdrant.models
-sys.modules["sentence_transformers"] = mock_st
+@pytest.fixture
+def mock_qdrant_encoder():
+    with patch("cherenkov.ai.lattice_bridge._get_qdrant") as mock_get_qdrant, \
+         patch("cherenkov.ai.lattice_bridge._get_encoder") as mock_get_encoder:
 
-from cherenkov.ai.lattice_bridge import embed_and_store, label_false_positive, query_similar_targets
+        mock_qdrant = MagicMock()
+        mock_encoder = MagicMock()
 
+        mock_get_qdrant.return_value = mock_qdrant
+        mock_get_encoder.return_value = mock_encoder
 
-@pytest.mark.asyncio
-@patch("qdrant_client.QdrantClient")
-@patch("sentence_transformers.SentenceTransformer")
-async def test_embed_and_store(mock_sentence_transformer, mock_qdrant_client):
-    # Setup mocks
-    mock_st_instance = MagicMock()
-    mock_sentence_transformer.return_value = mock_st_instance
-    mock_st_instance.encode.return_value = MagicMock()
-    mock_st_instance.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
+        yield mock_qdrant, mock_encoder
 
-    mock_qc_instance = MagicMock()
-    mock_qdrant_client.return_value = mock_qc_instance
+from cherenkov.ai.lattice_bridge import embed_and_store, query_similar_targets, label_false_positive, COLLECTION_NAME, _generate_id
 
-    # Also mock PointStruct
-    mock_point_struct = MagicMock()
-    sys.modules["qdrant_client.models"].PointStruct = mock_point_struct
+def test_embed_and_store(mock_qdrant_encoder):
+    mock_qdrant, mock_encoder = mock_qdrant_encoder
+    mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1, 0.2, 0.3])
 
-    trace = {"findings": "test finding"}
+    trace = {"finding_id": "test-123", "title": "XSS", "description": "Reflected"}
+    result = embed_and_store(trace)
 
-    # Call the function
-    point_id = await embed_and_store(trace)
+    assert result == "test-123"
+    mock_encoder.encode.assert_called_once_with("XSS Reflected")
+    mock_qdrant.upsert.assert_called_once()
+    kwargs = mock_qdrant.upsert.call_args[1]
+    assert kwargs["collection_name"] == COLLECTION_NAME
+    assert kwargs["points"][0].vector == [0.1, 0.2, 0.3]
+    assert kwargs["points"][0].payload == trace
+    assert kwargs["points"][0].id == _generate_id("test-123")
 
-    # Verify
-    mock_sentence_transformer.assert_called_once_with("all-MiniLM-L6-v2")
-    mock_st_instance.encode.assert_called_once_with("test finding")
+def test_query_similar_targets(mock_qdrant_encoder):
+    mock_qdrant, mock_encoder = mock_qdrant_encoder
+    mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1, 0.2, 0.3])
 
-    mock_qdrant_client.assert_called_once_with(url="http://localhost:6333")
-    mock_qc_instance.upsert.assert_called_once()
+    mock_result = MagicMock()
+    mock_result.payload = {"finding_id": "test-123"}
+    mock_qdrant.search.return_value = [mock_result]
 
-    args, kwargs = mock_qc_instance.upsert.call_args
-    assert args[0] == "cherenkov_findings"
-    assert "points" in kwargs
+    results = query_similar_targets("test target", limit=2)
 
-    assert isinstance(point_id, str)
-    assert len(point_id) > 0
+    assert len(results) == 1
+    assert results[0] == {"finding_id": "test-123"}
+    mock_encoder.encode.assert_called_once_with("test target")
+    mock_qdrant.search.assert_called_once()
+    kwargs = mock_qdrant.search.call_args[1]
+    assert kwargs["collection_name"] == COLLECTION_NAME
+    assert kwargs["query_vector"] == [0.1, 0.2, 0.3]
+    assert kwargs["limit"] == 2
 
+def test_label_false_positive(mock_qdrant_encoder):
+    mock_qdrant, _ = mock_qdrant_encoder
 
-@pytest.mark.asyncio
-@patch("qdrant_client.QdrantClient")
-@patch("sentence_transformers.SentenceTransformer")
-async def test_query_similar_targets(mock_sentence_transformer, mock_qdrant_client):
-    # Setup mocks
-    mock_st_instance = MagicMock()
-    mock_sentence_transformer.return_value = mock_st_instance
-    mock_st_instance.encode.return_value = MagicMock()
-    mock_st_instance.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
+    label_false_positive("test-123")
 
-    mock_qc_instance = MagicMock()
-    mock_qdrant_client.return_value = mock_qc_instance
+    mock_qdrant.set_payload.assert_called_once()
+    kwargs = mock_qdrant.set_payload.call_args[1]
+    assert kwargs["collection_name"] == COLLECTION_NAME
+    assert kwargs["payload"] == {"false_positive": True}
+    assert kwargs["points"][0] == _generate_id("test-123")
 
-    mock_result_1 = MagicMock()
-    mock_result_1.payload = {"key": "value1"}
-    mock_result_2 = MagicMock()
-    mock_result_2.payload = {"key": "value2"}
-
-    mock_qc_instance.search.return_value = [mock_result_1, mock_result_2]
-
-    # Call the function
-    results = await query_similar_targets("target url")
-
-    # Verify
-    mock_sentence_transformer.assert_called_once_with("all-MiniLM-L6-v2")
-    mock_st_instance.encode.assert_called_once_with("target url")
-
-    mock_qdrant_client.assert_called_once_with(url="http://localhost:6333")
-    mock_qc_instance.search.assert_called_once_with(
-        "cherenkov_findings", query_vector=[0.1, 0.2, 0.3], limit=5
-    )
-
-    assert results == [{"key": "value1"}, {"key": "value2"}]
-
-
-@pytest.mark.asyncio
-@patch("qdrant_client.QdrantClient")
-@patch("sentence_transformers.SentenceTransformer")
-async def test_query_similar_targets_exception(mock_sentence_transformer, mock_qdrant_client):
-    # Setup mocks
-    mock_st_instance = MagicMock()
-    mock_sentence_transformer.return_value = mock_st_instance
-    mock_st_instance.encode.return_value = MagicMock()
-    mock_st_instance.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
-
-    mock_qc_instance = MagicMock()
-    mock_qdrant_client.return_value = mock_qc_instance
-
-    # Simulate exception in search
-    mock_qc_instance.search.side_effect = Exception("Search error")
-
-    # Call the function
-    results = await query_similar_targets("target url")
-
-    # Verify empty list is returned on exception
-    assert results == []
-
-
-@pytest.mark.asyncio
-@patch("qdrant_client.QdrantClient")
-async def test_label_false_positive(mock_qdrant_client):
-    # Setup mock
-    mock_qc_instance = MagicMock()
-    mock_qdrant_client.return_value = mock_qc_instance
-
-    finding_id = "test-finding-id"
-
-    # Call the function
-    await label_false_positive(finding_id)
-
-    # Verify
-    mock_qdrant_client.assert_called_once_with(url="http://localhost:6333")
-    mock_qc_instance.set_payload.assert_called_once_with(
-        "cherenkov_findings", payload={"is_false_positive": True}, points=[finding_id]
-    )
-
-
-@pytest.mark.asyncio
-@patch("qdrant_client.QdrantClient")
-async def test_label_false_positive_exception(mock_qdrant_client):
-    # Setup mock
-    mock_qc_instance = MagicMock()
-    mock_qdrant_client.return_value = mock_qc_instance
-
-    # Simulate exception
-    mock_qc_instance.set_payload.side_effect = Exception("Payload error")
-
-    finding_id = "test-finding-id"
-
-    # Call the function (should not raise)
-    try:
-        await label_false_positive(finding_id)
-    except Exception as e:
-        pytest.fail(f"Exception was not caught: {e}")
+def test_graceful_failures():
+    with patch("cherenkov.ai.lattice_bridge._get_qdrant", return_value=None), \
+         patch("cherenkov.ai.lattice_bridge._get_encoder", return_value=None):
+        assert embed_and_store({"finding_id": "1"}) == ""
+        assert query_similar_targets("test") == []
+        # should not raise
+        label_false_positive("1")
