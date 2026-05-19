@@ -35,7 +35,7 @@ async def embed_and_store(trace: dict) -> str:
 
         # Deterministic hashing instead of python's hash()
         trace_id = str(trace.get('trace_id', str(uuid.uuid4())))
-        point_id = int(hashlib.md5(trace_id.encode(), usedforsecurity=False).hexdigest(), 16) % ((1<<63)-1)
+        point_id = int(hashlib.sha256(trace_id.encode()).hexdigest(), 16) % ((1<<63)-1)
 
         client.upsert(COLLECTION,
             points=[PointStruct(id=point_id, vector=vector, payload=trace)])
